@@ -6,9 +6,9 @@ async function getAvailableRooms({ checkIn, checkOut, type }) {
   const start = toDate(checkIn);
   const end = toDate(checkOut);
   const bookedRoomIds = await resRepo.findBookedRoomIds({ checkIn: start, checkOut: end });
-  const rooms = await roomRepo.findMany();
+  const rooms = await roomRepo.findOperative({ tipo: type });
 
-  return rooms.filter((room) => !bookedRoomIds.includes(room.id) && (!type || room.tipo === type));
+  return rooms.filter((room) => !bookedRoomIds.includes(room.id));
 }
 
 module.exports = { getAvailableRooms };

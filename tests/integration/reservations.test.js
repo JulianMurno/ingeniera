@@ -136,6 +136,37 @@ describe('Reservas', () => {
     expect(res.body.error.code).toBe('CONFLICT');
   });
 
+  test('creación sobre habitación en mantenimiento rechazada con 409', async () => {
+    await prisma.room.update({ where: { id: roomId }, data: { estado: 'MANTENIMIENTO' } });
+
+    const res = await request(app)
+      .post('/api/v1/reservations')
+      .set('Authorization', await auth())
+      .send({ guestId, roomId, checkIn: '2026-09-10', checkOut: '2026-09-13' });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('CONFLICT');
+    expect(await prisma.reservation.count()).toBe(0);
+  });
+
+  test('modificación hacia habitación en mantenimiento rechazada con 409', async () => {
+    const otra = await prisma.room.create({
+      data: { numero: '102', tipo: 'DOBLE', tarifa: 12000, estado: 'MANTENIMIENTO' },
+    });
+    const created = await request(app)
+      .post('/api/v1/reservations')
+      .set('Authorization', await auth())
+      .send({ guestId, roomId, checkIn: '2026-09-10', checkOut: '2026-09-13' });
+
+    const res = await request(app)
+      .patch(`/api/v1/reservations/${created.body.id}`)
+      .set('Authorization', await auth())
+      .send({ roomId: otra.id });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('CONFLICT');
+  });
+
   test('cancelación pasa la reserva a CANCELADA y libera disponibilidad', async () => {
     const created = await request(app)
       .post('/api/v1/reservations')

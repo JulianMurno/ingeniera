@@ -69,6 +69,34 @@ describe('Disponibilidad', () => {
     expect(res.body).toHaveLength(0);
   });
 
+  test('excluye habitaciones en mantenimiento aunque no tengan reservas', async () => {
+    const rooms = await seedRooms();
+    await prisma.room.update({ where: { id: rooms[0].id }, data: { estado: 'MANTENIMIENTO' } });
+
+    const res = await request(app)
+      .get('/api/v1/availability')
+      .set('Authorization', await authHeader('admin'))
+      .query({ checkIn: '2026-09-10', checkOut: '2026-09-12' });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0].numero).toBe('102');
+  });
+
+  test('vuelve a listar la habitación al volver a DISPONIBLE', async () => {
+    const rooms = await seedRooms();
+    await prisma.room.update({ where: { id: rooms[0].id }, data: { estado: 'MANTENIMIENTO' } });
+    await prisma.room.update({ where: { id: rooms[0].id }, data: { estado: 'DISPONIBLE' } });
+
+    const res = await request(app)
+      .get('/api/v1/availability')
+      .set('Authorization', await authHeader('admin'))
+      .query({ checkIn: '2026-09-10', checkOut: '2026-09-12' });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(2);
+  });
+
   test('rango inválido responde 422', async () => {
     const res = await request(app)
       .get('/api/v1/availability')

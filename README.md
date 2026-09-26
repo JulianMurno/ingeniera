@@ -48,7 +48,8 @@ Toda ruta protegida requiere `Authorization: Bearer <token>` (obtenido en `POST 
 | GET    | `/api/v1/guests?dni=&nombre=`      | Lista huéspedes (filtros opcionales)           | autenticado   |
 | GET    | `/api/v1/guests/{id}`              | Detalle de huésped                             | autenticado   |
 | POST   | `/api/v1/rooms`                    | Registra una habitación                        | ADMINISTRADOR |
-| GET    | `/api/v1/rooms`                    | Lista habitaciones                             | autenticado   |
+| GET    | `/api/v1/rooms`                    | Lista habitaciones (filtros y paginación)      | autenticado   |
+| GET    | `/api/v1/rooms/{id}`               | Detalle de habitación                         | autenticado   |
 | PATCH  | `/api/v1/rooms/{id}`               | Modifica una habitación                        | ADMINISTRADOR |
 | DELETE | `/api/v1/rooms/{id}`               | Elimina una habitación                         | ADMINISTRADOR |
 | GET    | `/api/v1/availability`             | Habitaciones disponibles por rango y tipo      | autenticado   |
@@ -58,6 +59,37 @@ Toda ruta protegida requiere `Authorization: Bearer <token>` (obtenido en `POST 
 | PATCH  | `/api/v1/reservations/{id}`        | Modifica una reserva (revalida disponibilidad) | autenticado   |
 | POST   | `/api/v1/reservations/{id}/cancel` | Cancela una reserva                            | autenticado   |
 
+## Habitaciones
+
+| Campo         | Tipo        | Reglas                                                      |
+| ------------- | ----------- | ----------------------------------------------------------- |
+| `numero`      | `string`    | Único y obligatorio                                          |
+| `tipo`        | `enum`      | `SINGLE` \| `DOBLE` \| `SUITE`                              |
+| `tarifa`      | `int`       | Entero positivo (por noche)                                  |
+| `estado`      | `enum`      | `DISPONIBLE` (por defecto) \| `MANTENIMIENTO`                |
+| `capacidad`   | `int`       | Ocupantes máximos, por defecto `1`; debe ser `>= 1` (`422`)  |
+| `descripcion` | `string?`   | Texto libre                                                  |
+| `comodidades` | `string[]?` | Comodidades ofrecidas; se persisten como JSON               |
+| `fotos`       | `string[]?` | URLs de imágenes; se persisten como JSON                    |
+
+El estado `MANTENIMIENTO` saca la habitación de la disponibilidad (`GET /availability` y el filtro
+por rango de `GET /rooms`) aunque no tenga reservas que solapen, y las reservas nuevas o modificadas
+sobre ella se rechazan con `409`.
+
+### Filtros de `GET /rooms`
+
+Todos los filtros son opcionales y combinables; la respuesta es `{ data, pagination }`:
+
+| Parámetro                 | Efecto                                                          |
+| ------------------------- | --------------------------------------------------------------- |
+| `tipo`                    | Tipo de habitación                                              |
+| `tarifaMin` / `tarifaMax` | Rango de tarifa (inclusivo)                                     |
+| `estado`                  | `DISPONIBLE` \| `MANTENIMIENTO`                                 |
+| `checkIn` + `checkOut`    | Solo habitaciones libres en ese rango (excluye `MANTENIMIENTO`) |
+| `page` / `pageSize`       | Paginación (por defecto `1` / `10`, máximo `100`)               |
+
+`checkIn` y `checkOut` van juntos y `checkIn` debe ser anterior a `checkOut`; si no, `422`.
+
 ## Convenciones
 
 - Prefijo de versión: `/api/v1`; recursos en plural.
@@ -66,6 +98,7 @@ Toda ruta protegida requiere `Authorization: Bearer <token>` (obtenido en `POST 
 - Fechas ISO `YYYY-MM-DD`; dinero en enteros (unidad base); tarifa por noche.
 - Disponibilidad derivada de reservas `CONFIRMADA` (una reserva ocupa `[checkIn, checkOut)`; recambio el mismo día permitido).
 - Alta/modificación de reserva validan solapamiento dentro de una transacción.
+- `comodidades` y `fotos` viajan como listas en la API y se persisten como JSON en SQLite.
 
 ## Tests
 

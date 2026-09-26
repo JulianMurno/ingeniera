@@ -3,12 +3,20 @@ const roomRepo = require('../repositories/room.repository');
 const guestRepo = require('../repositories/guest.repository');
 const resRepo = require('../repositories/reservation.repository');
 const { calculateNights, calculateTotal, toDate } = require('./business.service');
+const { estadoMantenimiento } = require('../schemas/room.schema');
 const { HttpError } = require('../lib/httpError');
 
 async function ensureResourceExists(guestId, roomId) {
   const room = await roomRepo.findById(roomId);
   if (!room) {
     throw new HttpError(422, 'VALIDATION_ERROR', 'La habitación no existe');
+  }
+  if (room.estado === estadoMantenimiento) {
+    throw new HttpError(
+      409,
+      'CONFLICT',
+      'La habitación está en mantenimiento y no admite reservas',
+    );
   }
   if (guestId) {
     const guest = await guestRepo.findById(guestId);

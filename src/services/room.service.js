@@ -1,4 +1,5 @@
 const roomRepo = require('../repositories/room.repository');
+const { toDate } = require('./business.service');
 const { HttpError } = require('../lib/httpError');
 
 async function createRoom(data) {
@@ -9,8 +10,16 @@ async function createRoom(data) {
   return roomRepo.create(data);
 }
 
-async function listRooms() {
-  return roomRepo.findMany();
+async function listRooms(params = {}) {
+  const { checkIn, checkOut } = params;
+  if (checkIn && checkOut) {
+    return roomRepo.findAvailableByRange({
+      ...params,
+      checkIn: toDate(checkIn),
+      checkOut: toDate(checkOut),
+    });
+  }
+  return roomRepo.findMany(params);
 }
 
 async function getRoom(id) {

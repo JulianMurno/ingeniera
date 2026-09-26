@@ -1,22 +1,32 @@
 const prisma = require('../lib/prisma');
+const { fromPersistence } = require('../lib/roomMapper');
 const { toDate } = require('../services/business.service');
 
 function client(tx) {
   return tx || prisma;
 }
 
+function withRoom(record) {
+  if (!record) return record;
+  return { ...record, room: fromPersistence(record.room) };
+}
+
 function create(data, tx) {
-  return client(tx).reservation.create({
-    data,
-    include: { guest: true, room: true },
-  });
+  return client(tx)
+    .reservation.create({
+      data,
+      include: { guest: true, room: true },
+    })
+    .then(withRoom);
 }
 
 function findById(id) {
-  return prisma.reservation.findUnique({
-    where: { id },
-    include: { guest: true, room: true },
-  });
+  return prisma.reservation
+    .findUnique({
+      where: { id },
+      include: { guest: true, room: true },
+    })
+    .then(withRoom);
 }
 
 function findOverlapping({ roomId, checkIn, checkOut, excludeId, tx }) {
@@ -64,23 +74,27 @@ function findMany({ dni, roomId, fecha, estado, guestId, page, pageSize }) {
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
-  ]);
+  ]).then(([total, rows]) => [total, rows.map(withRoom)]);
 }
 
 function update(id, data, tx) {
-  return client(tx).reservation.update({
-    where: { id },
-    data,
-    include: { guest: true, room: true },
-  });
+  return client(tx)
+    .reservation.update({
+      where: { id },
+      data,
+      include: { guest: true, room: true },
+    })
+    .then(withRoom);
 }
 
 function setEstado(id, estado, tx) {
-  return client(tx).reservation.update({
-    where: { id },
-    data: { estado },
-    include: { guest: true, room: true },
-  });
+  return client(tx)
+    .reservation.update({
+      where: { id },
+      data: { estado },
+      include: { guest: true, room: true },
+    })
+    .then(withRoom);
 }
 
 module.exports = {

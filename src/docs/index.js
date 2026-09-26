@@ -89,6 +89,9 @@ const spec = {
       post: {
         tags: ['Habitaciones'],
         summary: 'Registra una habitación (solo Administrador)',
+        description:
+          'Las habitaciones nacen en estado `DISPONIBLE` con capacidad 1. `comodidades` y `fotos` ' +
+          'se envian como listas de strings y la API las persiste como JSON.',
         security: [{ bearerAuth: [] }],
         requestBody: {
           required: true,
@@ -105,15 +108,62 @@ const spec = {
       },
       get: {
         tags: ['Habitaciones'],
-        summary: 'Lista las habitaciones',
+        summary: 'Lista las habitaciones con filtros y paginación',
+        description:
+          'Filtros combinables: `tipo`, `tarifaMin`/`tarifaMax`, `estado` y disponibilidad real en ' +
+          'un rango (`checkIn`/`checkOut`, ambos obligatorios y con `checkIn` < `checkOut`). ' +
+          'El filtro de rango excluye habitaciones en `MANTENIMIENTO` y las que ya tienen una ' +
+          'reserva `CONFIRMADA` que solapa.',
         security: [{ bearerAuth: [] }],
-        responses: { 200: { description: 'Lista de habitaciones' } },
+        parameters: [
+          { name: 'tipo', in: 'query', schema: { $ref: '#/components/schemas/RoomType' } },
+          { name: 'estado', in: 'query', schema: { $ref: '#/components/schemas/EstadoHabitacion' } },
+          { name: 'tarifaMin', in: 'query', schema: { type: 'integer' } },
+          { name: 'tarifaMax', in: 'query', schema: { type: 'integer' } },
+          {
+            name: 'checkIn',
+            in: 'query',
+            description: 'Inicio del rango de disponibilidad (requiere checkOut)',
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'checkOut',
+            in: 'query',
+            description: 'Fin del rango de disponibilidad (requiere checkIn)',
+            schema: { type: 'string', format: 'date' },
+          },
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'pageSize', in: 'query', schema: { type: 'integer', default: 10, maximum: 100 } },
+        ],
+        responses: {
+          200: {
+            description: 'Habitaciones paginadas',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/RoomList' } },
+            },
+          },
+          401: { $ref: '#/components/responses/Error401' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
       },
     },
     '/rooms/{id}': {
+      get: {
+        tags: ['Habitaciones'],
+        summary: 'Obtiene una habitación por id',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        responses: {
+          200: { description: 'Habitación encontrada' },
+          404: { $ref: '#/components/responses/Error404' },
+        },
+      },
       patch: {
         tags: ['Habitaciones'],
         summary: 'Modifica una habitación (solo Administrador)',
+        description:
+          'Permite cambiar `estado` (puesta en mantenimiento y regreso a disponible), `capacidad` ' +
+          'y los datos descriptivos. Enviar `null` en un texto o lista lo clears.',
         security: [{ bearerAuth: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
         requestBody: {
@@ -126,6 +176,8 @@ const spec = {
           200: { description: 'Habitación actualizada' },
           403: { $ref: '#/components/responses/Error403' },
           404: { $ref: '#/components/responses/Error404' },
+          409: { $ref: '#/components/responses/Error409' },
+          422: { $ref: '#/components/responses/Error422' },
         },
       },
       delete: {
@@ -145,6 +197,9 @@ const spec = {
       get: {
         tags: ['Disponibilidad'],
         summary: 'Consulta habitaciones disponibles por rango de fechas y tipo',
+        description:
+          'Las habitaciones en estado `MANTENIMIENTO` quedan fuera del resultado aunque no tengan ' +
+          'reservas que solapen el rango.',
         security: [{ bearerAuth: [] }],
         parameters: [
           {
@@ -171,6 +226,7 @@ const spec = {
       post: {
         tags: ['Reservas'],
         summary: 'Crea una reserva validando disponibilidad',
+        description: 'Responde `409` si la habitación está en `MANTENIMIENTO` o el rango se solapa.',
         security: [{ bearerAuth: [] }],
         requestBody: {
           required: true,
@@ -214,6 +270,7 @@ const spec = {
       patch: {
         tags: ['Reservas'],
         summary: 'Modifica una reserva revalidando disponibilidad',
+        description: 'Responde `409` si la habitación destino está en `MANTENIMIENTO` o el rango se solapa.',
         security: [{ bearerAuth: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
         requestBody: {
@@ -310,6 +367,7 @@ const spec = {
       },
       Rol: { type: 'string', enum: ['RECEPCIONISTA', 'ADMINISTRADOR'] },
       RoomType: { type: 'string', enum: ['SINGLE', 'DOBLE', 'SUITE'] },
+      EstadoHabitacion: { type: 'string', enum: ['DISPONIBLE', 'MANTENIMIENTO'] },
       EstadoReserva: { type: 'string', enum: ['CONFIRMADA', 'CANCELADA'] },
       Guest: {
         type: 'object',
@@ -331,6 +389,34 @@ const spec = {
             type: 'integer',
             description: 'Tarifa por noche en la unidad base de la moneda',
           },
+          estado: {
+            allOf: [{ $ref: '#/components/schemas/EstadoHabitacion' }],
+            description: 'Por defecto `DISPONIBLE`; en `MANTENIMIENTO` sale de la disponibilidad',
+            default: 'DISPONIBLE',
+          },
+          capacidad: {
+            type: 'integer',
+            minimum: 1,
+            description: 'Ocupantes máximos; debe ser mayor que cero',
+            default: 1,
+          },
+          descripcion: {
+            type: 'string',
+            nullable: true,
+            description: 'Texto libre descriptivo de la habitación',
+          },
+          comodidades: {
+            type: 'array',
+            nullable: true,
+            items: { type: 'string' },
+            description: 'Comodidades ofrecidas (persISTidas como JSON)',
+          },
+          fotos: {
+            type: 'array',
+            nullable: true,
+            items: { type: 'string', format: 'uri' },
+            description: 'URLs de imágenes de la habitación (persistidas como JSON)',
+          },
         },
       },
       RoomUpdate: {
@@ -339,6 +425,25 @@ const spec = {
           numero: { type: 'string' },
           tipo: { $ref: '#/components/schemas/RoomType' },
           tarifa: { type: 'integer' },
+          estado: { $ref: '#/components/schemas/EstadoHabitacion' },
+          capacidad: { type: 'integer', minimum: 1 },
+          descripcion: { type: 'string', nullable: true },
+          comodidades: { type: 'array', nullable: true, items: { type: 'string' } },
+          fotos: { type: 'array', nullable: true, items: { type: 'string', format: 'uri' } },
+        },
+      },
+      RoomList: {
+        type: 'object',
+        properties: {
+          data: { type: 'array', items: { $ref: '#/components/schemas/Room' } },
+          pagination: {
+            type: 'object',
+            properties: {
+              page: { type: 'integer' },
+              pageSize: { type: 'integer' },
+              total: { type: 'integer' },
+            },
+          },
         },
       },
       ReservationCreate: {
