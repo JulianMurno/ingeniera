@@ -3,9 +3,22 @@ const roomRepo = require('../repositories/room.repository');
 const guestRepo = require('../repositories/guest.repository');
 const resRepo = require('../repositories/reservation.repository');
 const rateService = require('./rate.service');
-const { buildStay, calculateNights, stayOverlaps, toDate } = require('./business.service');
+const notifications = require('./notifications.service');
+const { buildStay, calculateNights, stayOverlaps, toDate, addDays } = require('./business.service');
+const { getMinAdvanceNights } = require('../config/availabilityRules');
+const { calculateCancellationFee } = require('../config/reservationRules');
+const { generateReservationCode } = require('../lib/reservationCode');
+const {
+  CANCELADA,
+  EN_CURSO,
+  FINALIZADA,
+  NO_SHOW,
+  assertTransition,
+} = require('../lib/reservationState');
 const { estadoMantenimiento } = require('../schemas/room.schema');
 const { HttpError } = require('../lib/httpError');
+
+const CODE_ATTEMPTS = 5;
 
 async function ensureResourceExists(guestId, roomId) {
   const room = await roomRepo.findById(roomId);
@@ -28,20 +41,142 @@ async function ensureResourceExists(guestId, roomId) {
   return room;
 }
 
+function totalOcupantes({ adultos, menores }) {
+  return (adultos || 0) + (menores || 0);
+}
+
+function assertOcupantesValidos({ adultos, menores }) {
+  if (!Number.isInteger(adultos) || adultos < 1) {
+    throw new HttpError(422, 'VALIDATION_ERROR', 'Debe haber al menos un adulto por reserva');
+  }
+  if (!Number.isInteger(menores) || menores < 0) {
+    throw new HttpError(422, 'VALIDATION_ERROR', 'La cantidad de menores no puede ser negativa');
+  }
+}
+
+function assertOcupantesDentroDeCapacidad(ocupantes, room) {
+  if (ocupantes > room.capacidad) {
+    throw new HttpError(
+      422,
+      'VALIDATION_ERROR',
+      `La habitación ${room.numero} tiene capacidad para ${room.capacidad} ocupante(s) y la reserva ` +
+        `suma ${ocupantes}`,
+    );
+  }
+}
+
+function todayUtc() {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+}
+
+function assertRangoTemporalValido(checkIn) {
+  const hoy = todayUtc();
+
+  if (checkIn.getTime() < hoy.getTime()) {
+    throw new HttpError(
+      422,
+      'VALIDATION_ERROR',
+      'No se pueden crear reservas con check-in en el pasado',
+    );
+  }
+
+  const minAdvance = getMinAdvanceNights();
+  if (minAdvance > 0 && checkIn.getTime() < addDays(hoy, minAdvance).getTime()) {
+    throw new HttpError(
+      422,
+      'VALIDATION_ERROR',
+      `La reserva requiere al menos ${minAdvance} noche(s) de antelación`,
+    );
+  }
+}
+
+async function assertSinSobreocupacion({ room, stay, ocupantes, excludeId, tx }) {
+  const candidates = await resRepo.findCandidatesInWindow({
+    ...stay,
+    roomId: room.id,
+    excludeId,
+    tx,
+  });
+  const solapadas = candidates.filter((row) => stayOverlaps(stay, row));
+  const ocupados = solapadas.reduce((acc, row) => acc + totalOcupantes(row), 0);
+
+  if (ocupados + ocupantes > room.capacidad) {
+    throw new HttpError(
+      409,
+      'CONFLICT',
+      'La habitación no está disponible para el rango solicitado: la ocupación superaría su ' +
+        `capacidad (${room.capacidad})`,
+    );
+  }
+}
+
+async function generateUniqueCodigo() {
+  for (let intento = 0; intento < CODE_ATTEMPTS; intento += 1) {
+    const codigo = generateReservationCode();
+    const existente = await prisma.reservation.findUnique({
+      where: { codigo },
+      select: { id: true },
+    });
+    if (!existente) return codigo;
+  }
+  throw new HttpError(500, 'INTERNAL_SERVER_ERROR', 'No se pudo generar un código de confirmación');
+}
+
+function isoDay(date) {
+  return new Date(date.getTime()).toISOString().slice(0, 10);
+}
+
+function plural(noches) {
+  return noches === 1 ? '1 noche' : `${noches} noches`;
+}
+
+async function notificarConfirmacion(reservation) {
+  await notifications.sendEmail(
+    reservation.guest.email,
+    `Reserva confirmada ${reservation.codigo}`,
+    `Hola ${reservation.guest.nombre}, tu reserva ${reservation.codigo} está confirmada en la ` +
+      `habitación ${reservation.room.numero} del ${isoDay(reservation.checkIn)} al ` +
+      `${isoDay(reservation.checkOut)} (${plural(reservation.noches)}). Total: ${reservation.total}.`,
+  );
+}
+
+async function notificarCancelacion(reservation) {
+  const motivo = reservation.motivoCancelacion ? ` Motivo: ${reservation.motivoCancelacion}.` : '';
+  const multa =
+    reservation.multaCancelacion > 0 ? ` Multa aplicada: ${reservation.multaCancelacion}.` : '';
+
+  await notifications.sendEmail(
+    reservation.guest.email,
+    `Reserva cancelada ${reservation.codigo}`,
+    `Hola ${reservation.guest.nombre}, tu reserva ${reservation.codigo} del ` +
+      `${isoDay(reservation.checkIn)} al ${isoDay(reservation.checkOut)} en la habitación ` +
+      `${reservation.room.numero} fue cancelada.${motivo}${multa}`,
+  );
+}
+
+function normalizeOcupantes({ adultos, menores }, existing = {}) {
+  return {
+    adultos: adultos ?? existing.adultos ?? 1,
+    menores: menores ?? existing.menores ?? 0,
+  };
+}
+
 async function createReservation(data) {
   const room = await ensureResourceExists(data.guestId, data.roomId);
   const stay = buildStay(data);
   const nights = calculateNights(stay.checkIn, stay.checkOut);
+  const { adultos, menores } = normalizeOcupantes(data);
+  const ocupantes = totalOcupantes({ adultos, menores });
 
-  return prisma.$transaction(async (tx) => {
-    const candidates = await resRepo.findCandidatesInWindow({ ...stay, roomId: room.id, tx });
-    if (candidates.some((row) => stayOverlaps(stay, row))) {
-      throw new HttpError(
-        409,
-        'CONFLICT',
-        'La habitación no está disponible para el rango solicitado',
-      );
-    }
+  assertOcupantesValidos({ adultos, menores });
+  assertOcupantesDentroDeCapacidad(ocupantes, room);
+  assertRangoTemporalValido(stay.checkIn);
+
+  const codigo = await generateUniqueCodigo();
+
+  const reservation = await prisma.$transaction(async (tx) => {
+    await assertSinSobreocupacion({ room, stay, ocupantes, tx });
     const { total } = await rateService.getDetalleTarifas({
       roomType: room.tipo,
       checkIn: stay.checkIn,
@@ -57,12 +192,19 @@ async function createReservation(data) {
         noches: nights,
         total,
         estado: 'CONFIRMADA',
+        adultos,
+        menores,
+        codigo,
+        notas: data.notas ?? null,
         earlyCheckIn: stay.earlyCheckIn,
         lateCheckOut: stay.lateCheckOut,
       },
       tx,
     );
   });
+
+  await notificarConfirmacion(reservation);
+  return reservation;
 }
 
 async function listReservations(params) {
@@ -90,17 +232,15 @@ async function updateReservation(id, data) {
     lateCheckOut: data.lateCheckOut ?? existing.lateCheckOut,
   });
   const nights = calculateNights(stay.checkIn, stay.checkOut);
+  const { adultos, menores } = normalizeOcupantes(data, existing);
+  const ocupantes = totalOcupantes({ adultos, menores });
+
+  assertOcupantesValidos({ adultos, menores });
+  assertOcupantesDentroDeCapacidad(ocupantes, room);
+  assertRangoTemporalValido(stay.checkIn);
 
   return prisma.$transaction(async (tx) => {
-    const candidates = await resRepo.findCandidatesInWindow({
-      ...stay,
-      roomId,
-      excludeId: id,
-      tx,
-    });
-    if (candidates.some((row) => stayOverlaps(stay, row))) {
-      throw new HttpError(409, 'CONFLICT', 'La habitación no está disponible para el nuevo rango');
-    }
+    await assertSinSobreocupacion({ room, stay, ocupantes, excludeId: id, tx });
     const { total } = await rateService.getDetalleTarifas({
       roomType: room.tipo,
       checkIn: stay.checkIn,
@@ -116,6 +256,9 @@ async function updateReservation(id, data) {
         checkOut: stay.checkOut,
         noches: nights,
         total,
+        adultos,
+        menores,
+        notas: data.notas === undefined ? undefined : data.notas,
         earlyCheckIn: stay.earlyCheckIn,
         lateCheckOut: stay.lateCheckOut,
       },
@@ -124,15 +267,46 @@ async function updateReservation(id, data) {
   });
 }
 
-async function cancelReservation(id) {
-  await getReservation(id);
-  return resRepo.setEstado(id, 'CANCELADA');
+async function cambiarEstado(id, estado) {
+  const existing = await getReservation(id);
+  assertTransition(existing.estado, estado);
+  return resRepo.setEstado(id, estado);
+}
+
+async function checkInReservation(id) {
+  return cambiarEstado(id, EN_CURSO);
+}
+
+async function checkOutReservation(id) {
+  return cambiarEstado(id, FINALIZADA);
+}
+
+async function markNoShow(id) {
+  return cambiarEstado(id, NO_SHOW);
+}
+
+async function cancelReservation(id, data = {}) {
+  const existing = await getReservation(id);
+  assertTransition(existing.estado, CANCELADA);
+
+  const motivo = data.motivo === undefined ? existing.motivoCancelacion : data.motivo;
+  const reservation = await resRepo.update(id, {
+    estado: CANCELADA,
+    motivoCancelacion: motivo ?? null,
+    multaCancelacion: calculateCancellationFee(existing.total),
+  });
+
+  await notificarCancelacion(reservation);
+  return reservation;
 }
 
 module.exports = {
-  createReservation,
-  listReservations,
-  getReservation,
-  updateReservation,
+  checkInReservation,
+  checkOutReservation,
   cancelReservation,
+  createReservation,
+  getReservation,
+  listReservations,
+  markNoShow,
+  updateReservation,
 };

@@ -40,19 +40,25 @@ model Room {
 }
 
 model Reservation {
-  id           Int      @id @default(autoincrement())
-  guestId      Int
-  roomId       Int
-  checkIn      DateTime
-  checkOut     DateTime
-  noches       Int
-  total        Int
-  estado       String   @default("CONFIRMADA")
-  earlyCheckIn Boolean  @default(false)
-  lateCheckOut Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  guest        Guest    @relation(fields: [guestId], references: [id])
-  room         Room     @relation(fields: [roomId], references: [id])
+  id                Int      @id @default(autoincrement())
+  guestId           Int
+  roomId            Int
+  checkIn           DateTime
+  checkOut          DateTime
+  noches            Int
+  total             Int
+  estado            String   @default("CONFIRMADA")
+  adultos           Int      @default(1)
+  menores           Int      @default(0)
+  codigo            String?  @unique
+  notas             String?
+  motivoCancelacion String?
+  multaCancelacion  Int      @default(0)
+  earlyCheckIn      Boolean  @default(false)
+  lateCheckOut      Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  guest             Guest    @relation(fields: [guestId], references: [id])
+  room              Room     @relation(fields: [roomId], references: [id])
 
   @@index([roomId, checkIn, checkOut])
   @@index([guestId])

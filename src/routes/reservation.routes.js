@@ -4,6 +4,7 @@ const { validate } = require('../middlewares/validate.middleware');
 const {
   reservationCreateSchema,
   reservationUpdateSchema,
+  reservationCancelSchema,
   reservationQuerySchema,
 } = require('../schemas/reservation.schema');
 const { idParamSchema } = require('../schemas/room.schema');
@@ -13,6 +14,9 @@ const {
   getReservation,
   updateReservation,
   cancelReservation,
+  checkInReservation,
+  checkOutReservation,
+  markNoShow,
 } = require('../controllers/reservation.controller');
 
 const router = Router();
@@ -28,6 +32,14 @@ router.patch(
   validate(reservationUpdateSchema),
   updateReservation,
 );
-router.post('/:id/cancel', validate(idParamSchema, 'params'), cancelReservation);
+router.post(
+  '/:id/cancel',
+  validate(idParamSchema, 'params'),
+  validate(reservationCancelSchema),
+  cancelReservation,
+);
+router.post('/:id/checkin', validate(idParamSchema, 'params'), checkInReservation);
+router.post('/:id/checkout', validate(idParamSchema, 'params'), checkOutReservation);
+router.post('/:id/no-show', validate(idParamSchema, 'params'), markNoShow);
 
 module.exports = router;

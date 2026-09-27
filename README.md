@@ -8,6 +8,7 @@ Sistema de reservas de hotel con API REST (Node.js + Express + Prisma + SQLite).
 - **Prisma** + **SQLite** (local, migrable a PostgreSQL)
 - **Zod** para validación de entrada
 - **JWT** (jsonwebtoken) + **bcrypt** para autenticación
+- **nodemailer** para los emails de confirmación y cancelación (transporte `log` si no hay SMTP)
 - **OpenAPI / Swagger UI** (`/api/docs`)
 - **Jest + Supertest** para tests · **ESLint + Prettier** para calidad
 
@@ -60,11 +61,76 @@ Toda ruta protegida requiere `Authorization: Bearer <token>` (obtenido en `POST 
 | DELETE | `/api/v1/rates/weekdays/{id}`      | Elimina una tarifa por día de la semana           | ADMINISTRADOR |
 | GET    | `/api/v1/rates/quote`              | Tarifa vigente por tipo y rango (desglose x noche) | autenticado |
 | GET    | `/api/v1/availability`             | Habitaciones disponibles por rango, tipo y ocupantes | autenticado |
-| POST   | `/api/v1/reservations`             | Crea una reserva (valida disponibilidad)          | autenticado   |
+| POST   | `/api/v1/reservations`             | Crea una reserva (valida disponibilidad, ocupación y fechas) | autenticado   |
 | GET    | `/api/v1/reservations`             | Lista reservas con filtros y paginación           | autenticado   |
 | GET    | `/api/v1/reservations/{id}`        | Detalle de reserva                                | autenticado   |
 | PATCH  | `/api/v1/reservations/{id}`        | Modifica una reserva (revalida disponibilidad)    | autenticado   |
-| POST   | `/api/v1/reservations/{id}/cancel` | Cancela una reserva                               | autenticado   |
+| POST   | `/api/v1/reservations/{id}/cancel` | Cancela una reserva confirmada                    | autenticado   |
+| POST   | `/api/v1/reservations/{id}/checkin` | Registra el check-in (`EN_CURSO`)               | autenticado   |
+| POST   | `/api/v1/reservations/{id}/checkout` | Registra el check-out (`FINALIZADA`)            | autenticado   |
+| POST   | `/api/v1/reservations/{id}/no-show` | Marca `NO_SHOW` y libera el rango               | autenticado   |
+
+## Reservas
+
+### Ciclo de vida
+
+```
+CONFIRMADA ──checkin──▶ EN_CURSO ──checkout──▶ FINALIZADA
+    │
+    ├──cancel──▶ CANCELADA
+    └──no-show──▶ NO_SHOW
+```
+
+| Desde         | Transiciones válidas                | Endpoint                            |
+| ------------- | ----------------------------------- | ----------------------------------- |
+| `CONFIRMADA`  | `EN_CURSO`, `CANCELADA`, `NO_SHOW`  | `/checkin`, `/cancel`, `/no-show`    |
+| `EN_CURSO`    | `FINALIZADA`                        | `/checkout`                         |
+| `FINALIZADA`  | — (terminal)                        | —                                   |
+| `CANCELADA`   | — (terminal)                        | —                                   |
+| `NO_SHOW`     | — (terminal)                        | —                                   |
+
+Cualquier otra transición responde `409` sin cambiar el estado. Las reservas `EN_CURSO` y
+`FINALIZADA` no se pueden cancelar. Cancelar y marcar `NO_SHOW` liberan el rango, porque la
+ocupación se deriva de las reservas `CONFIRMADA`.
+
+### Campos
+
+| Campo                | Tipo        | Reglas                                                             |
+| -------------------- | ----------- | ------------------------------------------------------------------ |
+| `adultos`            | `int`       | Por defecto `1`; al menos un adulto por reserva                    |
+| `menores`            | `int`       | Por defecto `0`; no puede ser negativo                             |
+| `codigo`             | `string?`   | Código de confirmación `HR-XXXXXX`, único (reintento ante colisión) |
+| `notas`              | `string?`   | Notas internas; se devuelven en el detalle                         |
+| `motivoCancelacion`  | `string?`   | Motivo enviado al cancelar                                         |
+| `multaCancelacion`   | `int`       | Por defecto `0`; `CANCELLATION_FEE_PERCENT` % del `total`          |
+
+### Reglas al crear o modificar
+
+| Regla                                                | Código de error |
+| ---------------------------------------------------- | --------------- |
+| Habitación en `MANTENIMIENTO`                        | `409`           |
+| Ocupación de reservas solapadas > `Room.capacidad`   | `409`           |
+| `adultos + menores` > `Room.capacidad`                | `422`           |
+| `checkIn` en el pasado o con menos antelación       | `422`           |
+| Estancia fuera de `MIN_STAY_NIGHTS` / `MAX_STAY_NIGHTS` | `422`        |
+| Solapamiento por horarios (`earlyCheckIn`/`lateCheckOut`) | `409`       |
+
+La política antioverbooking suma los ocupantes de las reservas `CONFIRMADA` que solapan el rango
+en la misma habitación: mientras no superen la `capacidad` se aceptan varias reservas solapadas.
+
+## Notificaciones
+
+Al crear una reserva `CONFIRMADA` se envía un email de **confirmación** al huésped con el código de
+confirmación, el rango de fechas y la habitación. Al cancelarla se envía un email de **cancelación**
+con el motivo y la multa aplicada.
+
+| Variable            | Por defecto              | Efecto                                          |
+| ------------------- | ------------------------ | ----------------------------------------------- |
+| `SMTP_URL`          | vacío                    | Si está definida usa SMTP (nodemailer)          |
+| `NOTIFICATIONS_FROM` | `reservas@hotel.local`   | Remitente de los emails                         |
+
+Sin `SMTP_URL` el transporte por defecto es `log`: el email se escribe en la consola y no hace
+falta SMTP ni configuración extra (es lo que usan los tests).
 
 ## Habitaciones
 
@@ -101,15 +167,20 @@ Todos los filtros son opcionales y combinables; la respuesta es `{ data, paginat
 
 ### Configuración por entorno
 
-| Variable           | Por defecto | Efecto                                                        |
-| ------------------ | ----------- | ------------------------------------------------------------- |
-| `MIN_STAY_NIGHTS`  | `1`         | Noches mínimas de una estancia (`422` si el rango no alcanza)  |
-| `MAX_STAY_NIGHTS`  | `30`        | Noches máximas de una estancia (`422` si el rango las supera)  |
-| `CHECK_IN_HOUR`    | `15:00`     | Hora de ingreso; un ingreso antes ocupa el día completo       |
-| `CHECK_OUT_HOUR`   | `11:00`     | Hora de egreso; una salida después ocupa el día completo       |
+| Variable            | Por defecto | Efecto                                                        |
+| ------------------- | ----------- | ------------------------------------------------------------- |
+| `MIN_STAY_NIGHTS`   | `1`         | Noches mínimas de una estancia (`422` si el rango no alcanza)  |
+| `MAX_STAY_NIGHTS`   | `30`        | Noches máximas de una estancia (`422` si el rango las supera)  |
+| `MIN_ADVANCE_NIGHTS`| `0`         | Noches mínimas de antelación desde hoy (`422` si no se cumple) |
+| `CHECK_IN_HOUR`     | `15:00`     | Hora de ingreso; un ingreso antes ocupa el día completo       |
+| `CHECK_OUT_HOUR`    | `11:00`     | Hora de egreso; una salida después ocupa el día completo       |
+| `CANCELLATION_FEE_PERCENT` | `0` | Porcentaje del total que se cobra como multa al cancelar       |
 
 Se leen del entorno en cada request (aceptan `HH:mm` o `HH`; un valor inválido cae en el
-por defecto) y se aplican en `GET /availability` y al crear o modificar reservas.
+por defecto). `MIN_STAY_NIGHTS`, `MAX_STAY_NIGHTS`, `CHECK_IN_HOUR` y `CHECK_OUT_HOUR` se aplican
+en `GET /availability` y al crear o modificar reservas; `MIN_ADVANCE_NIGHTS` y
+`CANCELLATION_FEE_PERCENT` son reglas de reserva y solo se aplican al crear, modificar o cancelar
+una reserva.
 
 ### Filtros de `GET /availability`
 
@@ -152,11 +223,13 @@ usa `reservation.service` para el `total` al crear y al modificar una reserva.
 ## Convenciones
 
 - Prefijo de versión: `/api/v1`; recursos en plural.
-- Códigos: `200`, `201`, `400`, `401`, `403`, `404`, `409` (duplicado o solape), `422` (validación).
+- Códigos: `200`, `201`, `400`, `401`, `403`, `404`, `409` (duplicado, solape o transición inválida), `422` (validación).
 - Error uniforme: `{ "error": { "code", "message", "details" } }`.
 - Fechas ISO `YYYY-MM-DD`; dinero en enteros (unidad base); tarifa por noche.
 - Disponibilidad derivada de reservas `CONFIRMADA` (una reserva ocupa `[checkIn, checkOut)`; recambio el mismo día permitido).
-- Alta/modificación de reserva validan solapamiento dentro de una transacción.
+- Alta/modificación de reserva validan ocupación y solapamiento dentro de una transacción.
+- El estado de una reserva solo cambia por los endpoints de transición; cualquier otra combinación responde `409`.
+- Los emails se envían de forma síncrona dentro del request; la interfaz `sendEmail(to, subject, body)` permite migrarla a cola.
 - `comodidades` y `fotos` viajan como listas en la API y se persisten como JSON en SQLite.
 - Toda regla configurable por entorno se lee en cada request, nunca se cachea al cargar el módulo.
 
@@ -181,6 +254,7 @@ npm run test:watch
 | `npm run prisma:migrate`  | `prisma migrate dev`                 |
 | `npm run prisma:seed`     | `prisma db seed`                     |
 | `npm run prisma:generate` | `prisma generate`                    |
+| `npm run prisma:backfill-codigo` | Completa el `codigo` de las reservas sin código |
 
 ## Despliegue
 

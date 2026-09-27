@@ -6,7 +6,10 @@ const spec = {
     title: 'Sistema de Reservas de Hotel - MVP',
     version: '1.0.0',
     description:
-      'API del MVP de reservas: autenticación, huéspedes, habitaciones, tarifas, disponibilidad y reservas.',
+      'API del MVP de reservas: autenticación, huéspedes, habitaciones, tarifas, disponibilidad y ' +
+      'reservas. El ciclo de vida de una reserva es `CONFIRMADA → EN_CURSO → FINALIZADA`, con las ' +
+      'salidas `CANCELADA` y `NO_SHOW`. Al crear y al cancelar una reserva se envía un email al ' +
+      'huésped (transporte `log` por defecto, SMTP si se define `SMTP_URL`).',
   },
   servers: [{ url: '/api/v1' }],
   tags: [
@@ -16,6 +19,13 @@ const spec = {
     { name: 'Tarifas' },
     { name: 'Disponibilidad' },
     { name: 'Reservas' },
+    {
+      name: 'Notificaciones',
+      description:
+        'Envío de emails al huésped. No expone endpoints: se dispara al crear una reserva ' +
+        '(confirmación, con el código, las fechas y la habitación) y al cancelarla (con el motivo y ' +
+        'la multa). El transporte es `log` salvo que se defina `SMTP_URL`.',
+    },
   ],
   paths: {
     '/auth/login': {
@@ -402,11 +412,14 @@ const spec = {
     '/reservations': {
       post: {
         tags: ['Reservas'],
-        summary: 'Crea una reserva validando disponibilidad',
+        summary: 'Crea una reserva validando disponibilidad, ocupación y fechas',
         description:
-          'Responde `409` si la habitación está en `MANTENIMIENTO` o el rango se solapa (incluido el ' +
-          'solapamiento por horarios del día). Responde `422` si el rango no cumple la estancia mínima o ' +
-          'máxima configurada. El total se calcula con la tarifa vigente de cada noche.',
+          'Responde `409` si la habitación está en `MANTENIMIENTO` o si el rango se solapa y la ' +
+          'ocupación resultante supera su `capacidad`. Responde `422` si el rango no cumple la ' +
+          'estancia mínima o máxima, si `checkIn` está en el pasado o no respeta la antelación ' +
+          'mínima (`MIN_ADVANCE_NIGHTS`), o si los ocupantes superan la capacidad de la habitación. ' +
+          'El total se calcula con la tarifa vigente de cada noche y la reserva nace con un `codigo` ' +
+          'de confirmación único y en estado `CONFIRMADA` (con email de confirmación al huésped).',
         security: [{ bearerAuth: [] }],
         requestBody: {
           required: true,
@@ -415,7 +428,12 @@ const spec = {
           },
         },
         responses: {
-          201: { description: 'Reserva creada' },
+          201: {
+            description: 'Reserva creada',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/Reservation' } },
+            },
+          },
           409: { $ref: '#/components/responses/Error409' },
           422: { $ref: '#/components/responses/Error422' },
         },
@@ -440,20 +458,29 @@ const spec = {
       get: {
         tags: ['Reservas'],
         summary: 'Obtiene una reserva por id',
+        description:
+          'Devuelve también el `codigo` de confirmación, las `notas`, los ocupantes y, si está ' +
+          'cancelada, el `motivoCancelacion` y la `multaCancelacion`.',
         security: [{ bearerAuth: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
         responses: {
-          200: { description: 'Reserva encontrada' },
+          200: {
+            description: 'Reserva encontrada',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/Reservation' } },
+            },
+          },
           404: { $ref: '#/components/responses/Error404' },
         },
       },
       patch: {
         tags: ['Reservas'],
-        summary: 'Modifica una reserva revalidando disponibilidad',
+        summary: 'Modifica una reserva revalidando disponibilidad, ocupación y fechas',
         description:
-          'Responde `409` si la habitación destino está en `MANTENIMIENTO` o el rango se solapa, y `422` ' +
-          'si el rango resultante queda fuera de los límites de estancia. El total se recalcula con la ' +
-          'tarifa vigente de cada noche.',
+          'Responde `409` si la habitación destino está en `MANTENIMIENTO`, si el rango se solapa y la ' +
+          'ocupación supera la capacidad, y `422` si el rango o los ocupantes quedan fuera de los ' +
+          'límites, si `checkIn` queda en el pasado o no respeta la antelación mínima. El total se ' +
+          'recalcula con la tarifa vigente de cada noche.',
         security: [{ bearerAuth: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
         requestBody: {
@@ -473,12 +500,70 @@ const spec = {
     '/reservations/{id}/cancel': {
       post: {
         tags: ['Reservas'],
-        summary: 'Cancela una reserva',
+        summary: 'Cancela una reserva confirmada y libera el rango',
+        description:
+          'Solo admite una reserva `CONFIRMADA`: una reserva `EN_CURSO` o `FINALIZADA` responde ' +
+          '`409` sin cambiar de estado. Guarda el `motivo` recibido en `motivoCancelacion` y calcula ' +
+          'la `multaCancelacion` como el `CANCELLATION_FEE_PERCENT` por ciento del total. Envía el ' +
+          'email de cancelación al huésped.',
         security: [{ bearerAuth: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        requestBody: {
+          required: false,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/ReservationCancel' } },
+          },
+        },
         responses: {
           200: { description: 'Reserva cancelada' },
           404: { $ref: '#/components/responses/Error404' },
+          409: { $ref: '#/components/responses/Error409' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+    },
+    '/reservations/{id}/checkin': {
+      post: {
+        tags: ['Reservas'],
+        summary: 'Registra el check-in y pasa la reserva a EN_CURSO',
+        description:
+          'Solo admite una reserva `CONFIRMADA`; en cualquier otro estado responde `409`.',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        responses: {
+          200: { description: 'Reserva en curso' },
+          404: { $ref: '#/components/responses/Error404' },
+          409: { $ref: '#/components/responses/Error409' },
+        },
+      },
+    },
+    '/reservations/{id}/checkout': {
+      post: {
+        tags: ['Reservas'],
+        summary: 'Registra el check-out y pasa la reserva a FINALIZADA',
+        description: 'Solo admite una reserva `EN_CURSO`; en cualquier otro estado responde `409`.',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        responses: {
+          200: { description: 'Reserva finalizada' },
+          404: { $ref: '#/components/responses/Error404' },
+          409: { $ref: '#/components/responses/Error409' },
+        },
+      },
+    },
+    '/reservations/{id}/no-show': {
+      post: {
+        tags: ['Reservas'],
+        summary: 'Marca la reserva confirmada como NO_SHOW y libera el rango',
+        description:
+          'Solo admite una reserva `CONFIRMADA`; en cualquier otro estado responde `409`. Al quedar ' +
+          'en `NO_SHOW` la reserva deja de ocupar el rango y vuelve a estar disponible.',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        responses: {
+          200: { description: 'Reserva marcada como no-presentación' },
+          404: { $ref: '#/components/responses/Error404' },
+          409: { $ref: '#/components/responses/Error409' },
         },
       },
     },
@@ -552,7 +637,19 @@ const spec = {
       Rol: { type: 'string', enum: ['RECEPCIONISTA', 'ADMINISTRADOR'] },
       RoomType: { type: 'string', enum: ['SINGLE', 'DOBLE', 'SUITE'] },
       EstadoHabitacion: { type: 'string', enum: ['DISPONIBLE', 'MANTENIMIENTO'] },
-      EstadoReserva: { type: 'string', enum: ['CONFIRMADA', 'CANCELADA'] },
+      EstadoReserva: {
+        type: 'string',
+        enum: ['CONFIRMADA', 'EN_CURSO', 'FINALIZADA', 'CANCELADA', 'NO_SHOW'],
+        description:
+          'Ciclo de vida: `CONFIRMADA → EN_CURSO` (check-in), `EN_CURSO → FINALIZADA` (check-out), ' +
+          '`CONFIRMADA → CANCELADA` y `CONFIRMADA → NO_SHOW`. Cualquier otra transición responde `409`; ' +
+          '`FINALIZADA`, `CANCELADA` y `NO_SHOW` son terminales.',
+      },
+      TransicionReserva: {
+        type: 'string',
+        enum: ['checkin', 'checkout', 'cancel', 'no-show'],
+        description: 'Transiciones de estado expuestas como endpoints de la reserva',
+      },
       Guest: {
         type: 'object',
         required: ['nombre', 'email', 'dni'],
@@ -630,14 +727,71 @@ const spec = {
           },
         },
       },
+      Reservation: {
+        type: 'object',
+        properties: {
+          id: { type: 'integer' },
+          guestId: { type: 'integer' },
+          roomId: { type: 'integer' },
+          checkIn: { type: 'string', format: 'date' },
+          checkOut: { type: 'string', format: 'date' },
+          noches: { type: 'integer' },
+          total: { type: 'integer' },
+          estado: { $ref: '#/components/schemas/EstadoReserva' },
+          adultos: {
+            type: 'integer',
+            minimum: 1,
+            description: 'Adultos de la reserva; por defecto `1`',
+            default: 1,
+          },
+          menores: {
+            type: 'integer',
+            minimum: 0,
+            description: 'Menores de la reserva; por defecto `0`',
+            default: 0,
+          },
+          codigo: {
+            type: 'string',
+            nullable: true,
+            pattern: '^HR-[A-Z0-9]{6}$',
+            description: 'Código de confirmación único asignado al crear la reserva',
+          },
+          notas: {
+            type: 'string',
+            nullable: true,
+            description: 'Notas internas de la reserva',
+          },
+          motivoCancelacion: {
+            type: 'string',
+            nullable: true,
+            description: 'Motivo registrado al cancelar la reserva',
+          },
+          multaCancelacion: {
+            type: 'integer',
+            minimum: 0,
+            description: 'Multa aplicada al cancelar; por defecto `0`',
+            default: 0,
+          },
+          earlyCheckIn: { $ref: '#/components/schemas/EarlyCheckIn' },
+          lateCheckOut: { $ref: '#/components/schemas/LateCheckOut' },
+        },
+      },
       ReservationCreate: {
         type: 'object',
         required: ['guestId', 'roomId', 'checkIn', 'checkOut'],
         properties: {
           guestId: { type: 'integer' },
           roomId: { type: 'integer' },
-          checkIn: { type: 'string', format: 'date' },
+          checkIn: {
+            type: 'string',
+            format: 'date',
+            description:
+              'No puede estar en el pasado y debe respetar `MIN_ADVANCE_NIGHTS`; de lo contrario `422`',
+          },
           checkOut: { type: 'string', format: 'date' },
+          adultos: { type: 'integer', minimum: 1, default: 1 },
+          menores: { type: 'integer', minimum: 0, default: 0 },
+          notas: { type: 'string', nullable: true },
           earlyCheckIn: { $ref: '#/components/schemas/EarlyCheckIn' },
           lateCheckOut: { $ref: '#/components/schemas/LateCheckOut' },
         },
@@ -649,8 +803,21 @@ const spec = {
           roomId: { type: 'integer' },
           checkIn: { type: 'string', format: 'date' },
           checkOut: { type: 'string', format: 'date' },
+          adultos: { type: 'integer', minimum: 1 },
+          menores: { type: 'integer', minimum: 0 },
+          notas: { type: 'string', nullable: true },
           earlyCheckIn: { $ref: '#/components/schemas/EarlyCheckIn' },
           lateCheckOut: { $ref: '#/components/schemas/LateCheckOut' },
+        },
+      },
+      ReservationCancel: {
+        type: 'object',
+        properties: {
+          motivo: {
+            type: 'string',
+            nullable: true,
+            description: 'Motivo de la cancelación; se persiste en `motivoCancelacion`',
+          },
         },
       },
       EarlyCheckIn: {

@@ -40,7 +40,34 @@ async function updateReservation(req, res, next) {
 
 async function cancelReservation(req, res, next) {
   try {
-    const reservation = await reservationService.cancelReservation(req.params.id);
+    const reservation = await reservationService.cancelReservation(req.params.id, req.body);
+    return res.json(reservation);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function checkInReservation(req, res, next) {
+  try {
+    const reservation = await reservationService.checkInReservation(req.params.id);
+    return res.json(reservation);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function checkOutReservation(req, res, next) {
+  try {
+    const reservation = await reservationService.checkOutReservation(req.params.id);
+    return res.json(reservation);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function markNoShow(req, res, next) {
+  try {
+    const reservation = await reservationService.markNoShow(req.params.id);
     return res.json(reservation);
   } catch (err) {
     return next(err);
@@ -53,4 +80,7 @@ module.exports = {
   getReservation,
   updateReservation,
   cancelReservation,
+  checkInReservation,
+  checkOutReservation,
+  markNoShow,
 };

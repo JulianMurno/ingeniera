@@ -122,4 +122,59 @@ describe('Documentación OpenAPI', () => {
     expect(schemas.ReservationUpdate.properties.lateCheckOut).toBeDefined();
     expect(spec.paths['/reservations/{id}'].patch.responses[422]).toBeDefined();
   });
+
+  test('los estados del ciclo de vida de la reserva están documentados', () => {
+    const { properties } = spec.components.schemas.Reservation;
+
+    expect(spec.components.schemas.EstadoReserva.enum).toEqual([
+      'CONFIRMADA',
+      'EN_CURSO',
+      'FINALIZADA',
+      'CANCELADA',
+      'NO_SHOW',
+    ]);
+    expect(properties.estado).toEqual({ $ref: '#/components/schemas/EstadoReserva' });
+  });
+
+  test('la schema de reserva documenta ocupantes, código, notas, motivo y multa', () => {
+    const create = spec.components.schemas.ReservationCreate;
+
+    expect(create.properties.adultos.default).toBe(1);
+    expect(create.properties.menores.default).toBe(0);
+    expect(create.required).toEqual(['guestId', 'roomId', 'checkIn', 'checkOut']);
+
+    const reserva = spec.components.schemas.Reservation.properties;
+    expect(reserva.codigo.pattern).toBe('^HR-[A-Z0-9]{6}$');
+    expect(reserva.notas).toBeDefined();
+    expect(reserva.motivoCancelacion).toBeDefined();
+    expect(reserva.multaCancelacion.minimum).toBe(0);
+    expect(reserva.adultos.minimum).toBe(1);
+    expect(reserva.menores.minimum).toBe(0);
+  });
+
+  test('los endpoints de transición del ciclo de vida están documentados', () => {
+    for (const accion of ['checkin', 'checkout', 'cancel', 'no-show']) {
+      const path = spec.paths[`/reservations/{id}/${accion}`];
+      expect(path).toBeDefined();
+      expect(path.post.tags).toEqual(['Reservas']);
+      expect(path.post.responses[200]).toBeDefined();
+      expect(path.post.responses[404]).toBeDefined();
+      expect(path.post.responses[409]).toBeDefined();
+    }
+
+    expect(
+      spec.paths['/reservations/{id}/cancel'].post.requestBody.content['application/json'],
+    ).toEqual({ schema: { $ref: '#/components/schemas/ReservationCancel' } });
+  });
+
+  test('las notificaciones por email están documentadas', () => {
+    const tag = spec.tags.find((t) => t.name === 'Notificaciones');
+
+    expect(tag).toBeDefined();
+    expect(tag.description).toMatch(/SMTP_URL/);
+    expect(spec.paths['/reservations'].post.description).toMatch(/email de confirmación/);
+    expect(spec.paths['/reservations/{id}/cancel'].post.description).toMatch(
+      /email de cancelación/,
+    );
+  });
 });

@@ -3,6 +3,7 @@ const { HttpError } = require('../lib/httpError');
 const DEFAULTS = {
   MIN_STAY_NIGHTS: 1,
   MAX_STAY_NIGHTS: 30,
+  MIN_ADVANCE_NIGHTS: 0,
   CHECK_IN_HOUR: '15:00',
   CHECK_OUT_HOUR: '11:00',
 };
@@ -18,6 +19,11 @@ function readEnv(name) {
 function readIntEnv(name) {
   const parsed = Number.parseInt(readEnv(name), 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : Number.parseInt(DEFAULTS[name], 10);
+}
+
+function readNonNegativeIntEnv(name) {
+  const parsed = Number.parseInt(readEnv(name), 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : Number.parseInt(DEFAULTS[name], 10);
 }
 
 function parseMinutes(value) {
@@ -40,6 +46,10 @@ function getMinStayNights() {
 
 function getMaxStayNights() {
   return readIntEnv('MAX_STAY_NIGHTS');
+}
+
+function getMinAdvanceNights() {
+  return readNonNegativeIntEnv('MIN_ADVANCE_NIGHTS');
 }
 
 function getCheckInHour() {
@@ -91,6 +101,7 @@ module.exports = {
   getCheckInHour,
   getCheckOutHour,
   getMaxStayNights,
+  getMinAdvanceNights,
   getMinStayNights,
   startOfDay,
 };
