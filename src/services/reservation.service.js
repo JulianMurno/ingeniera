@@ -2,7 +2,8 @@ const prisma = require('../lib/prisma');
 const roomRepo = require('../repositories/room.repository');
 const guestRepo = require('../repositories/guest.repository');
 const resRepo = require('../repositories/reservation.repository');
-const { calculateNights, calculateTotal, toDate } = require('./business.service');
+const rateService = require('./rate.service');
+const { buildStay, calculateNights, stayOverlaps, toDate } = require('./business.service');
 const { estadoMantenimiento } = require('../schemas/room.schema');
 const { HttpError } = require('../lib/httpError');
 
@@ -28,35 +29,36 @@ async function ensureResourceExists(guestId, roomId) {
 }
 
 async function createReservation(data) {
-  const checkIn = toDate(data.checkIn);
-  const checkOut = toDate(data.checkOut);
   const room = await ensureResourceExists(data.guestId, data.roomId);
-  const nights = calculateNights(checkIn, checkOut);
+  const stay = buildStay(data);
+  const nights = calculateNights(stay.checkIn, stay.checkOut);
 
   return prisma.$transaction(async (tx) => {
-    const overlapping = await resRepo.findOverlapping({
-      roomId: room.id,
-      checkIn,
-      checkOut,
-      tx,
-    });
-    if (overlapping.length > 0) {
+    const candidates = await resRepo.findCandidatesInWindow({ ...stay, roomId: room.id, tx });
+    if (candidates.some((row) => stayOverlaps(stay, row))) {
       throw new HttpError(
         409,
         'CONFLICT',
         'La habitación no está disponible para el rango solicitado',
       );
     }
-    const total = calculateTotal(nights, room.tarifa);
+    const { total } = await rateService.getDetalleTarifas({
+      roomType: room.tipo,
+      checkIn: stay.checkIn,
+      checkOut: stay.checkOut,
+      tarifaBase: room.tarifa,
+    });
     return resRepo.create(
       {
         guestId: data.guestId,
         roomId: room.id,
-        checkIn,
-        checkOut,
+        checkIn: stay.checkIn,
+        checkOut: stay.checkOut,
         noches: nights,
         total,
         estado: 'CONFIRMADA',
+        earlyCheckIn: stay.earlyCheckIn,
+        lateCheckOut: stay.lateCheckOut,
       },
       tx,
     );
@@ -80,24 +82,45 @@ async function updateReservation(id, data) {
 
   const roomId = data.roomId ?? existing.roomId;
   const guestId = data.guestId ?? existing.guestId;
-  const checkIn = data.checkIn ? toDate(data.checkIn) : existing.checkIn;
-  const checkOut = data.checkOut ? toDate(data.checkOut) : existing.checkOut;
   const room = await ensureResourceExists(guestId, roomId);
-  const nights = calculateNights(checkIn, checkOut);
+  const stay = buildStay({
+    checkIn: data.checkIn ? toDate(data.checkIn) : existing.checkIn,
+    checkOut: data.checkOut ? toDate(data.checkOut) : existing.checkOut,
+    earlyCheckIn: data.earlyCheckIn ?? existing.earlyCheckIn,
+    lateCheckOut: data.lateCheckOut ?? existing.lateCheckOut,
+  });
+  const nights = calculateNights(stay.checkIn, stay.checkOut);
 
   return prisma.$transaction(async (tx) => {
-    const overlapping = await resRepo.findOverlapping({
+    const candidates = await resRepo.findCandidatesInWindow({
+      ...stay,
       roomId,
-      checkIn,
-      checkOut,
       excludeId: id,
       tx,
     });
-    if (overlapping.length > 0) {
+    if (candidates.some((row) => stayOverlaps(stay, row))) {
       throw new HttpError(409, 'CONFLICT', 'La habitación no está disponible para el nuevo rango');
     }
-    const total = calculateTotal(nights, room.tarifa);
-    return resRepo.update(id, { guestId, roomId, checkIn, checkOut, noches: nights, total }, tx);
+    const { total } = await rateService.getDetalleTarifas({
+      roomType: room.tipo,
+      checkIn: stay.checkIn,
+      checkOut: stay.checkOut,
+      tarifaBase: room.tarifa,
+    });
+    return resRepo.update(
+      id,
+      {
+        guestId,
+        roomId,
+        checkIn: stay.checkIn,
+        checkOut: stay.checkOut,
+        noches: nights,
+        total,
+        earlyCheckIn: stay.earlyCheckIn,
+        lateCheckOut: stay.lateCheckOut,
+      },
+      tx,
+    );
   });
 }
 

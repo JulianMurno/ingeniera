@@ -8,6 +8,8 @@ const reservationCreateSchema = z
     roomId: z.number().int().positive('roomId inválido'),
     checkIn: isoDate,
     checkOut: isoDate,
+    earlyCheckIn: z.boolean().optional(),
+    lateCheckOut: z.boolean().optional(),
   })
   .refine((d) => d.checkIn < d.checkOut, {
     message: 'checkIn debe ser anterior a checkOut',
@@ -20,6 +22,8 @@ const reservationUpdateSchema = z
     roomId: z.number().int().positive('roomId inválido').optional(),
     checkIn: isoDate.optional(),
     checkOut: isoDate.optional(),
+    earlyCheckIn: z.boolean().optional(),
+    lateCheckOut: z.boolean().optional(),
   })
   .refine((d) => !d.checkIn || !d.checkOut || d.checkIn < d.checkOut, {
     message: 'checkIn debe ser anterior a checkOut',

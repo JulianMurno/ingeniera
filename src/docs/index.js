@@ -6,13 +6,14 @@ const spec = {
     title: 'Sistema de Reservas de Hotel - MVP',
     version: '1.0.0',
     description:
-      'API del MVP de reservas: autenticación, huéspedes, habitaciones, disponibilidad y reservas.',
+      'API del MVP de reservas: autenticación, huéspedes, habitaciones, tarifas, disponibilidad y reservas.',
   },
   servers: [{ url: '/api/v1' }],
   tags: [
     { name: 'Auth' },
     { name: 'Huéspedes' },
     { name: 'Habitaciones' },
+    { name: 'Tarifas' },
     { name: 'Disponibilidad' },
     { name: 'Reservas' },
   ],
@@ -117,7 +118,11 @@ const spec = {
         security: [{ bearerAuth: [] }],
         parameters: [
           { name: 'tipo', in: 'query', schema: { $ref: '#/components/schemas/RoomType' } },
-          { name: 'estado', in: 'query', schema: { $ref: '#/components/schemas/EstadoHabitacion' } },
+          {
+            name: 'estado',
+            in: 'query',
+            schema: { $ref: '#/components/schemas/EstadoHabitacion' },
+          },
           { name: 'tarifaMin', in: 'query', schema: { type: 'integer' } },
           { name: 'tarifaMax', in: 'query', schema: { type: 'integer' } },
           {
@@ -193,13 +198,165 @@ const spec = {
         },
       },
     },
+    '/rates/seasons': {
+      post: {
+        tags: ['Tarifas'],
+        summary: 'Define una tarifa por temporada de un tipo de habitación (solo Administrador)',
+        description:
+          'El rango es semiabierto `[fechaInicio, fechaFin)`: la noche de `fechaFin` ya no pertenece a ' +
+          'la temporada. Dos temporadas del mismo tipo no pueden superponerse (`409`).',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/SeasonCreate' } },
+          },
+        },
+        responses: {
+          201: { description: 'Temporada creada' },
+          403: { $ref: '#/components/responses/Error403' },
+          409: { $ref: '#/components/responses/Error409' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+      get: {
+        tags: ['Tarifas'],
+        summary: 'Lista las temporadas de tarifa, opcionalmente por tipo de habitación',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'roomType', in: 'query', schema: { $ref: '#/components/schemas/RoomType' } },
+        ],
+        responses: {
+          200: {
+            description: 'Temporadas registradas',
+            content: {
+              'application/json': {
+                schema: { type: 'array', items: { $ref: '#/components/schemas/Season' } },
+              },
+            },
+          },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+    },
+    '/rates/seasons/{id}': {
+      delete: {
+        tags: ['Tarifas'],
+        summary: 'Elimina una temporada de tarifa (solo Administrador)',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        responses: {
+          200: { description: 'Temporada eliminada' },
+          403: { $ref: '#/components/responses/Error403' },
+          404: { $ref: '#/components/responses/Error404' },
+        },
+      },
+    },
+    '/rates/weekdays': {
+      post: {
+        tags: ['Tarifas'],
+        summary: 'Define la tarifa de un día de la semana (solo Administrador)',
+        description:
+          'Una sola tarifa por tipo de habitación y día (`diaSemana` de `0` domingo a `6` sábado). ' +
+          'Repetirla para el mismo par responde `409`.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/WeekdayRateCreate' } },
+          },
+        },
+        responses: {
+          201: { description: 'Tarifa por día de semana creada' },
+          403: { $ref: '#/components/responses/Error403' },
+          409: { $ref: '#/components/responses/Error409' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+      get: {
+        tags: ['Tarifas'],
+        summary: 'Lista las tarifas por día de semana, opcionalmente por tipo de habitación',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'roomType', in: 'query', schema: { $ref: '#/components/schemas/RoomType' } },
+        ],
+        responses: {
+          200: {
+            description: 'Tarifas por día de semana registradas',
+            content: {
+              'application/json': {
+                schema: { type: 'array', items: { $ref: '#/components/schemas/WeekdayRate' } },
+              },
+            },
+          },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+    },
+    '/rates/weekdays/{id}': {
+      delete: {
+        tags: ['Tarifas'],
+        summary: 'Elimina la tarifa de un día de la semana (solo Administrador)',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        responses: {
+          200: { description: 'Tarifa eliminada' },
+          403: { $ref: '#/components/responses/Error403' },
+          404: { $ref: '#/components/responses/Error404' },
+        },
+      },
+    },
+    '/rates/quote': {
+      get: {
+        tags: ['Tarifas'],
+        summary: 'Consulta la tarifa vigente de un tipo de habitación para un rango',
+        description:
+          'Devuelve el desglose noche por noche con la tarifa aplicada y su origen. La precedencia es ' +
+          'tarifa por día de semana (`WEEKDAY`) > tarifa de temporada (`SEASON`) > tarifa base de la ' +
+          'habitación (`BASE`).',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: 'roomType',
+            in: 'query',
+            required: true,
+            schema: { $ref: '#/components/schemas/RoomType' },
+          },
+          {
+            name: 'checkIn',
+            in: 'query',
+            required: true,
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'checkOut',
+            in: 'query',
+            required: true,
+            schema: { type: 'string', format: 'date' },
+          },
+        ],
+        responses: {
+          200: {
+            description: 'Tarifa vigente por noche y total del rango',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/RateQuote' } },
+            },
+          },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+    },
     '/availability': {
       get: {
         tags: ['Disponibilidad'],
-        summary: 'Consulta habitaciones disponibles por rango de fechas y tipo',
+        summary: 'Consulta habitaciones disponibles por rango de fechas, tipo y ocupantes',
         description:
           'Las habitaciones en estado `MANTENIMIENTO` quedan fuera del resultado aunque no tengan ' +
-          'reservas que solapen el rango.',
+          'reservas que solapen el rango. Se aplican las reglas de estancia mínima y máxima ' +
+          'configuradas por entorno (`MIN_STAY_NIGHTS` / `MAX_STAY_NIGHTS`): un rango fuera de los ' +
+          'límites responde `422`. Con `earlyCheckIn` o `lateCheckOut` se consulta la disponibilidad ' +
+          'teniendo en cuenta los horarios de check-in y check-out, de modo que el recambio del mismo ' +
+          'día solo se permite si no se pisan.',
         security: [{ bearerAuth: [] }],
         parameters: [
           {
@@ -215,6 +372,26 @@ const spec = {
             schema: { type: 'string', format: 'date' },
           },
           { name: 'type', in: 'query', schema: { $ref: '#/components/schemas/RoomType' } },
+          {
+            name: 'ocupantes',
+            in: 'query',
+            description:
+              'Cantidad de huéspedes; solo devuelve habitaciones con esa capacidad o más',
+            schema: { type: 'integer', minimum: 1 },
+          },
+          {
+            name: 'earlyCheckIn',
+            in: 'query',
+            description:
+              'Ingreso antes de `CHECK_IN_HOUR`; bloquea el check-out de la noche anterior',
+            schema: { type: 'boolean' },
+          },
+          {
+            name: 'lateCheckOut',
+            in: 'query',
+            description: 'Salida después de `CHECK_OUT_HOUR`; bloquea el check-in del mismo día',
+            schema: { type: 'boolean' },
+          },
         ],
         responses: {
           200: { description: 'Lista de habitaciones disponibles' },
@@ -226,7 +403,10 @@ const spec = {
       post: {
         tags: ['Reservas'],
         summary: 'Crea una reserva validando disponibilidad',
-        description: 'Responde `409` si la habitación está en `MANTENIMIENTO` o el rango se solapa.',
+        description:
+          'Responde `409` si la habitación está en `MANTENIMIENTO` o el rango se solapa (incluido el ' +
+          'solapamiento por horarios del día). Responde `422` si el rango no cumple la estancia mínima o ' +
+          'máxima configurada. El total se calcula con la tarifa vigente de cada noche.',
         security: [{ bearerAuth: [] }],
         requestBody: {
           required: true,
@@ -270,7 +450,10 @@ const spec = {
       patch: {
         tags: ['Reservas'],
         summary: 'Modifica una reserva revalidando disponibilidad',
-        description: 'Responde `409` si la habitación destino está en `MANTENIMIENTO` o el rango se solapa.',
+        description:
+          'Responde `409` si la habitación destino está en `MANTENIMIENTO` o el rango se solapa, y `422` ' +
+          'si el rango resultante queda fuera de los límites de estancia. El total se recalcula con la ' +
+          'tarifa vigente de cada noche.',
         security: [{ bearerAuth: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
         requestBody: {
@@ -283,6 +466,7 @@ const spec = {
           200: { description: 'Reserva actualizada' },
           404: { $ref: '#/components/responses/Error404' },
           409: { $ref: '#/components/responses/Error409' },
+          422: { $ref: '#/components/responses/Error422' },
         },
       },
     },
@@ -454,6 +638,8 @@ const spec = {
           roomId: { type: 'integer' },
           checkIn: { type: 'string', format: 'date' },
           checkOut: { type: 'string', format: 'date' },
+          earlyCheckIn: { $ref: '#/components/schemas/EarlyCheckIn' },
+          lateCheckOut: { $ref: '#/components/schemas/LateCheckOut' },
         },
       },
       ReservationUpdate: {
@@ -463,6 +649,95 @@ const spec = {
           roomId: { type: 'integer' },
           checkIn: { type: 'string', format: 'date' },
           checkOut: { type: 'string', format: 'date' },
+          earlyCheckIn: { $ref: '#/components/schemas/EarlyCheckIn' },
+          lateCheckOut: { $ref: '#/components/schemas/LateCheckOut' },
+        },
+      },
+      EarlyCheckIn: {
+        type: 'boolean',
+        description:
+          'El huésped ingresa antes de `CHECK_IN_HOUR`; ocupa la habitación desde el inicio del día de ' +
+          '`checkIn` y por eso impide el check-out de otra reserva ese mismo día.',
+        default: false,
+      },
+      LateCheckOut: {
+        type: 'boolean',
+        description:
+          'El huésped sale después de `CHECK_OUT_HOUR`; ocupa la habitación hasta el final del día de ' +
+          '`checkOut` y por eso impide el check-in de otra reserva ese mismo día.',
+        default: false,
+      },
+      Season: {
+        type: 'object',
+        properties: {
+          id: { type: 'integer' },
+          roomType: { $ref: '#/components/schemas/RoomType' },
+          fechaInicio: { type: 'string', format: 'date' },
+          fechaFin: {
+            type: 'string',
+            format: 'date',
+            description: 'Excluida: la temporada cubre `[fechaInicio, fechaFin)`',
+          },
+          tarifa: { type: 'integer', description: 'Tarifa por noche durante la temporada' },
+        },
+      },
+      SeasonCreate: {
+        type: 'object',
+        required: ['roomType', 'fechaInicio', 'fechaFin', 'tarifa'],
+        properties: {
+          roomType: { $ref: '#/components/schemas/RoomType' },
+          fechaInicio: { type: 'string', format: 'date' },
+          fechaFin: { type: 'string', format: 'date' },
+          tarifa: { type: 'integer', minimum: 1 },
+        },
+      },
+      WeekdayRate: {
+        type: 'object',
+        properties: {
+          id: { type: 'integer' },
+          roomType: { $ref: '#/components/schemas/RoomType' },
+          diaSemana: { $ref: '#/components/schemas/DiaSemana' },
+          tarifa: { type: 'integer', description: 'Tarifa por noche para ese día de la semana' },
+        },
+      },
+      WeekdayRateCreate: {
+        type: 'object',
+        required: ['roomType', 'diaSemana', 'tarifa'],
+        properties: {
+          roomType: { $ref: '#/components/schemas/RoomType' },
+          diaSemana: { $ref: '#/components/schemas/DiaSemana' },
+          tarifa: { type: 'integer', minimum: 1 },
+        },
+      },
+      DiaSemana: {
+        type: 'integer',
+        minimum: 0,
+        maximum: 6,
+        description: '0 domingo, 1 lunes, 2 martes, 3 miércoles, 4 jueves, 5 viernes, 6 sábado',
+      },
+      RateQuote: {
+        type: 'object',
+        properties: {
+          roomType: { $ref: '#/components/schemas/RoomType' },
+          checkIn: { type: 'string', format: 'date' },
+          checkOut: { type: 'string', format: 'date' },
+          noches: { type: 'integer' },
+          tarifaBase: {
+            type: 'integer',
+            description: 'Tarifa base del tipo de habitación usada cuando no hay override',
+          },
+          total: { type: 'integer' },
+          detalle: { type: 'array', items: { $ref: '#/components/schemas/RateNight' } },
+        },
+      },
+      RateNight: {
+        type: 'object',
+        properties: {
+          fecha: { type: 'string', format: 'date' },
+          diaSemana: { $ref: '#/components/schemas/DiaSemana' },
+          dia: { type: 'string', description: 'Nombre del día de la semana' },
+          tarifa: { type: 'integer' },
+          origen: { type: 'string', enum: ['WEEKDAY', 'SEASON', 'BASE'] },
         },
       },
     },

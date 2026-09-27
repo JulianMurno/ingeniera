@@ -12,6 +12,8 @@ let cachedTokens = {};
 
 async function resetDb() {
   await prisma.reservation.deleteMany();
+  await prisma.season.deleteMany();
+  await prisma.weekdayRate.deleteMany();
   await prisma.room.deleteMany();
   await prisma.guest.deleteMany();
   await prisma.user.deleteMany();
@@ -43,4 +45,48 @@ function authHeader(username) {
   return tokenFor(username).then((token) => `Bearer ${token}`);
 }
 
-module.exports = { app, prisma, resetDb, tokenFor, authHeader, TEST_PASSWORD };
+function withEnv(values, run) {
+  const previous = {};
+  for (const [key, value] of Object.entries(values)) {
+    previous[key] = process.env[key];
+    if (value === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = value;
+    }
+  }
+
+  const restore = () => {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  };
+
+  let result;
+  try {
+    result = run();
+  } catch (err) {
+    restore();
+    throw err;
+  }
+
+  if (result && typeof result.then === 'function') {
+    return Promise.resolve(result).finally(restore);
+  }
+  restore();
+  return result;
+}
+
+module.exports = {
+  app,
+  prisma,
+  resetDb,
+  tokenFor,
+  authHeader,
+  TEST_PASSWORD,
+  withEnv,
+};

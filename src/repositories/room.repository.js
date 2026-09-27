@@ -4,9 +4,7 @@ const { estadoMantenimiento } = require('../schemas/room.schema');
 const resRepo = require('./reservation.repository');
 
 function create(data) {
-  return prisma.room
-    .create({ data: toPersistence(data) })
-    .then((room) => fromPersistence(room));
+  return prisma.room.create({ data: toPersistence(data) }).then((room) => fromPersistence(room));
 }
 
 function findById(id) {
@@ -17,10 +15,14 @@ function findByNumero(numero) {
   return prisma.room.findUnique({ where: { numero } }).then((room) => fromPersistence(room));
 }
 
-function findOperative({ tipo } = {}) {
+function findOperative({ tipo, capacidadMin } = {}) {
   return prisma.room
     .findMany({
-      where: { tipo, estado: { not: estadoMantenimiento } },
+      where: {
+        tipo,
+        capacidad: capacidadMin === undefined ? undefined : { gte: capacidadMin },
+        estado: { not: estadoMantenimiento },
+      },
       orderBy: { numero: 'asc' },
     })
     .then((rooms) => rooms.map(fromPersistence));
@@ -49,15 +51,17 @@ function findMany(params = {}) {
   const { page = 1, pageSize = 10 } = params;
   const where = buildWhere(params);
 
-  return prisma.$transaction([
-    prisma.room.count({ where }),
-    prisma.room.findMany({
-      where,
-      orderBy: { numero: 'asc' },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    }),
-  ]).then(([total, rooms]) => [total, rooms.map(fromPersistence)]);
+  return prisma
+    .$transaction([
+      prisma.room.count({ where }),
+      prisma.room.findMany({
+        where,
+        orderBy: { numero: 'asc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ])
+    .then(([total, rooms]) => [total, rooms.map(fromPersistence)]);
 }
 
 function findAvailableByRange({ checkIn, checkOut, ...params }) {

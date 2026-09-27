@@ -1,6 +1,6 @@
 const prisma = require('../lib/prisma');
 const { fromPersistence } = require('../lib/roomMapper');
-const { toDate } = require('../services/business.service');
+const { searchWindow, toDate } = require('../services/business.service');
 
 function client(tx) {
   return tx || prisma;
@@ -29,14 +29,16 @@ function findById(id) {
     .then(withRoom);
 }
 
-function findOverlapping({ roomId, checkIn, checkOut, excludeId, tx }) {
+function findCandidatesInWindow({ checkIn, checkOut, roomId, excludeId, tx }) {
+  const { desde, hasta } = searchWindow({ checkIn, checkOut });
+
   return client(tx).reservation.findMany({
     where: {
       roomId,
       estado: 'CONFIRMADA',
-      id: excludeId ? { not: excludeId } : undefined,
-      checkIn: { lt: checkOut },
-      checkOut: { gt: checkIn },
+      id: excludeId === undefined ? undefined : { not: excludeId },
+      checkIn: { lt: hasta },
+      checkOut: { gte: desde },
     },
   });
 }
@@ -65,16 +67,18 @@ function findMany({ dni, roomId, fecha, estado, guestId, page, pageSize }) {
     checkOut: fecha ? { gt: toDate(fecha) } : undefined,
   };
 
-  return prisma.$transaction([
-    prisma.reservation.count({ where }),
-    prisma.reservation.findMany({
-      where,
-      include: { guest: true, room: true },
-      orderBy: { id: 'desc' },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    }),
-  ]).then(([total, rows]) => [total, rows.map(withRoom)]);
+  return prisma
+    .$transaction([
+      prisma.reservation.count({ where }),
+      prisma.reservation.findMany({
+        where,
+        include: { guest: true, room: true },
+        orderBy: { id: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ])
+    .then(([total, rows]) => [total, rows.map(withRoom)]);
 }
 
 function update(id, data, tx) {
@@ -100,7 +104,7 @@ function setEstado(id, estado, tx) {
 module.exports = {
   create,
   findById,
-  findOverlapping,
+  findCandidatesInWindow,
   findBookedRoomIds,
   findMany,
   update,

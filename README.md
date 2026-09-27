@@ -20,7 +20,7 @@ Sistema de reservas de hotel con API REST (Node.js + Express + Prisma + SQLite).
 
 ```bash
 npm install
-cp .env.example .env          # editar JWT_SECRET
+cp .env.example .env          # editar JWT_SECRET y las reglas de disponibilidad
 npx prisma migrate dev
 npx prisma db seed            # crea usuarios admin y recepcionista
 npm run dev                   # o: npm start
@@ -41,23 +41,30 @@ La API queda en `http://localhost:3000/api/v1` y los docs en `http://localhost:3
 
 Toda ruta protegida requiere `Authorization: Bearer <token>` (obtenido en `POST /auth/login`). La gestión de habitaciones exige rol `ADMINISTRADOR`.
 
-| Método | Ruta                               | Descripción                                    | Rol           |
-| ------ | ---------------------------------- | ---------------------------------------------- | ------------- |
-| POST   | `/api/v1/auth/login`               | Inicia sesión y devuelve un JWT                | público       |
-| POST   | `/api/v1/guests`                   | Registra un huésped                            | autenticado   |
-| GET    | `/api/v1/guests?dni=&nombre=`      | Lista huéspedes (filtros opcionales)           | autenticado   |
-| GET    | `/api/v1/guests/{id}`              | Detalle de huésped                             | autenticado   |
-| POST   | `/api/v1/rooms`                    | Registra una habitación                        | ADMINISTRADOR |
-| GET    | `/api/v1/rooms`                    | Lista habitaciones (filtros y paginación)      | autenticado   |
-| GET    | `/api/v1/rooms/{id}`               | Detalle de habitación                         | autenticado   |
-| PATCH  | `/api/v1/rooms/{id}`               | Modifica una habitación                        | ADMINISTRADOR |
-| DELETE | `/api/v1/rooms/{id}`               | Elimina una habitación                         | ADMINISTRADOR |
-| GET    | `/api/v1/availability`             | Habitaciones disponibles por rango y tipo      | autenticado   |
-| POST   | `/api/v1/reservations`             | Crea una reserva (valida disponibilidad)       | autenticado   |
-| GET    | `/api/v1/reservations`             | Lista reservas con filtros y paginación        | autenticado   |
-| GET    | `/api/v1/reservations/{id}`        | Detalle de reserva                             | autenticado   |
-| PATCH  | `/api/v1/reservations/{id}`        | Modifica una reserva (revalida disponibilidad) | autenticado   |
-| POST   | `/api/v1/reservations/{id}/cancel` | Cancela una reserva                            | autenticado   |
+| Método | Ruta                               | Descripción                                       | Rol           |
+| ------ | ---------------------------------- | ------------------------------------------------- | ------------- |
+| POST   | `/api/v1/auth/login`               | Inicia sesión y devuelve un JWT                   | público       |
+| POST   | `/api/v1/guests`                   | Registra un huésped                               | autenticado   |
+| GET    | `/api/v1/guests?dni=&nombre=`      | Lista huéspedes (filtros opcionales)              | autenticado   |
+| GET    | `/api/v1/guests/{id}`              | Detalle de huésped                                | autenticado   |
+| POST   | `/api/v1/rooms`                    | Registra una habitación                           | ADMINISTRADOR |
+| GET    | `/api/v1/rooms`                    | Lista habitaciones (filtros y paginación)         | autenticado   |
+| GET    | `/api/v1/rooms/{id}`               | Detalle de habitación                            | autenticado   |
+| PATCH  | `/api/v1/rooms/{id}`               | Modifica una habitación                           | ADMINISTRADOR |
+| DELETE | `/api/v1/rooms/{id}`               | Elimina una habitación                            | ADMINISTRADOR |
+| POST   | `/api/v1/rates/seasons`            | Alta de tarifa por temporada de un tipo           | ADMINISTRADOR |
+| GET    | `/api/v1/rates/seasons?roomType=`  | Lista de temporadas de tarifa                     | autenticado   |
+| DELETE | `/api/v1/rates/seasons/{id}`       | Elimina una temporada de tarifa                   | ADMINISTRADOR |
+| POST   | `/api/v1/rates/weekdays`           | Alta de tarifa por día de la semana de un tipo    | ADMINISTRADOR |
+| GET    | `/api/v1/rates/weekdays?roomType=` | Lista de tarifas por día de la semana             | autenticado   |
+| DELETE | `/api/v1/rates/weekdays/{id}`      | Elimina una tarifa por día de la semana           | ADMINISTRADOR |
+| GET    | `/api/v1/rates/quote`              | Tarifa vigente por tipo y rango (desglose x noche) | autenticado |
+| GET    | `/api/v1/availability`             | Habitaciones disponibles por rango, tipo y ocupantes | autenticado |
+| POST   | `/api/v1/reservations`             | Crea una reserva (valida disponibilidad)          | autenticado   |
+| GET    | `/api/v1/reservations`             | Lista reservas con filtros y paginación           | autenticado   |
+| GET    | `/api/v1/reservations/{id}`        | Detalle de reserva                                | autenticado   |
+| PATCH  | `/api/v1/reservations/{id}`        | Modifica una reserva (revalida disponibilidad)    | autenticado   |
+| POST   | `/api/v1/reservations/{id}/cancel` | Cancela una reserva                               | autenticado   |
 
 ## Habitaciones
 
@@ -90,6 +97,58 @@ Todos los filtros son opcionales y combinables; la respuesta es `{ data, paginat
 
 `checkIn` y `checkOut` van juntos y `checkIn` debe ser anterior a `checkOut`; si no, `422`.
 
+## Reglas de disponibilidad y tarifas
+
+### Configuración por entorno
+
+| Variable           | Por defecto | Efecto                                                        |
+| ------------------ | ----------- | ------------------------------------------------------------- |
+| `MIN_STAY_NIGHTS`  | `1`         | Noches mínimas de una estancia (`422` si el rango no alcanza)  |
+| `MAX_STAY_NIGHTS`  | `30`        | Noches máximas de una estancia (`422` si el rango las supera)  |
+| `CHECK_IN_HOUR`    | `15:00`     | Hora de ingreso; un ingreso antes ocupa el día completo       |
+| `CHECK_OUT_HOUR`   | `11:00`     | Hora de egreso; una salida después ocupa el día completo       |
+
+Se leen del entorno en cada request (aceptan `HH:mm` o `HH`; un valor inválido cae en el
+por defecto) y se aplican en `GET /availability` y al crear o modificar reservas.
+
+### Filtros de `GET /availability`
+
+| Parámetro        | Efecto                                                                    |
+| ---------------- | ------------------------------------------------------------------------- |
+| `checkIn`        | Inicio del rango (obligatorio)                                           |
+| `checkOut`       | Fin del rango (obligatorio)                                              |
+| `type`           | Tipo de habitación                                                       |
+| `ocupantes`      | Solo habitaciones con `capacidad >= ocupantes`                           |
+| `earlyCheckIn`   | Ingreso antes de `CHECK_IN_HOUR`: bloquea el egreso de la noche anterior |
+| `lateCheckOut`   | Salida después de `CHECK_OUT_HOUR`: bloquea el ingreso del mismo día     |
+
+Se excluyen las habitaciones en `MANTENIMIENTO` y las que tienen una reserva `CONFIRMADA`
+que solapa. El recambio el mismo día está permitido mientras no se pida `earlyCheckIn` ni
+haya un `lateCheckOut` de la reserva anterior.
+
+### Tarifas por temporada y por día de semana
+
+Las tarifas se definen por **tipo de habitación** y sustituyen a `Room.tarifa`:
+
+| Recurso                     | Campos                                                       |
+| --------------------------- | ------------------------------------------------------------ |
+| Temporada (`/rates/seasons`)| `roomType`, `fechaInicio`, `fechaFin`, `tarifa`              |
+| Día de semana (`/rates/weekdays`) | `roomType`, `diaSemana` (`0` domingo … `6` sábado), `tarifa` |
+
+La temporada cubre el rango semiabierto `[fechaInicio, fechaFin)`: la noche de `fechaFin`
+queda fuera. Las temporadas de un mismo tipo no pueden superponerse (`409`), y un tipo no
+puede tener dos tarifas para el mismo día de la semana (`409`).
+
+La tarifa efectiva de cada noche se resuelve con esta precedencia:
+
+1. `WEEKDAY` — tarifa del día de la semana.
+2. `SEASON` — tarifa de la temporada vigente.
+3. `BASE` — `Room.tarifa` de la habitación reservada.
+
+`GET /rates/quote?roomType=&checkIn=&checkOut=` devuelve el desglose noche por noche con la
+tarifa aplicada y su `origen`, además del `total` del rango. Ese mismo cálculo es el que
+usa `reservation.service` para el `total` al crear y al modificar una reserva.
+
 ## Convenciones
 
 - Prefijo de versión: `/api/v1`; recursos en plural.
@@ -99,6 +158,7 @@ Todos los filtros son opcionales y combinables; la respuesta es `{ data, paginat
 - Disponibilidad derivada de reservas `CONFIRMADA` (una reserva ocupa `[checkIn, checkOut)`; recambio el mismo día permitido).
 - Alta/modificación de reserva validan solapamiento dentro de una transacción.
 - `comodidades` y `fotos` viajan como listas en la API y se persisten como JSON en SQLite.
+- Toda regla configurable por entorno se lee en cada request, nunca se cachea al cargar el módulo.
 
 ## Tests
 
