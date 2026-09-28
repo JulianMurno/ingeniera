@@ -14,7 +14,13 @@ const spec = {
   servers: [{ url: '/api/v1' }],
   tags: [
     { name: 'Auth' },
-    { name: 'Huéspedes' },
+    {
+      name: 'Huéspedes',
+      description:
+        'Alta, edición, consulta paginada y baja lógica. `DELETE` archiva al huésped ' +
+        '(`activo = false`) en lugar de borrarlo: sus reservas se conservan y quedan fuera ' +
+        'del listado y del detalle (`404`).',
+    },
     { name: 'Habitaciones' },
     { name: 'Tarifas' },
     { name: 'Disponibilidad' },
@@ -58,40 +64,103 @@ const spec = {
       post: {
         tags: ['Huéspedes'],
         summary: 'Registra un huésped',
+        description:
+          'El `dni` debe tener entre 6 y 10 caracteres alfanuméricos y es único entre los ' +
+          'huéspedes. El `telefono` es opcional y admite un `+` inicial.',
         security: [{ bearerAuth: [] }],
         requestBody: {
           required: true,
           content: {
             'application/json': {
-              schema: { $ref: '#/components/schemas/Guest' },
+              schema: { $ref: '#/components/schemas/GuestCreate' },
             },
           },
         },
         responses: {
-          201: { description: 'Huésped creado' },
+          201: {
+            description: 'Huésped creado',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Guest' } } },
+          },
           409: { $ref: '#/components/responses/Error409' },
           422: { $ref: '#/components/responses/Error422' },
         },
       },
       get: {
         tags: ['Huéspedes'],
-        summary: 'Lista huéspedes con filtros por DNI y nombre',
+        summary: 'Lista huéspedes activos con filtros por DNI y nombre y paginación',
+        description:
+          'Solo devuelve huéspedes activos: los archivados con `DELETE` quedan fuera del listado ' +
+          'y responden `404` en el detalle.',
         security: [{ bearerAuth: [] }],
         parameters: [
           { name: 'dni', in: 'query', schema: { type: 'string' } },
           { name: 'nombre', in: 'query', schema: { type: 'string' } },
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'pageSize', in: 'query', schema: { type: 'integer', default: 10, maximum: 100 } },
         ],
-        responses: { 200: { description: 'Lista de huéspedes' } },
+        responses: {
+          200: {
+            description: 'Huéspedes paginados',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/GuestList' } },
+            },
+          },
+          401: { $ref: '#/components/responses/Error401' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
       },
     },
     '/guests/{id}': {
       get: {
         tags: ['Huéspedes'],
         summary: 'Obtiene un huésped por id',
+        description: 'Un huésped archivado responde `404`.',
         security: [{ bearerAuth: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
         responses: {
-          200: { description: 'Huésped encontrado' },
+          200: {
+            description: 'Huésped encontrado',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Guest' } } },
+          },
+          404: { $ref: '#/components/responses/Error404' },
+        },
+      },
+      patch: {
+        tags: ['Huéspedes'],
+        summary: 'Modifica un huésped',
+        description:
+          'Actualiza solo los campos enviados. Revalida el formato del email y, si cambia el ' +
+          '`dni`, comprueba su unicidad excluyendo al propio huésped (`409` si ya lo usa otro). ' +
+          'Un huésped archivado responde `404`.',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/GuestUpdate' } },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Huésped actualizado',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Guest' } } },
+          },
+          404: { $ref: '#/components/responses/Error404' },
+          409: { $ref: '#/components/responses/Error409' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+      delete: {
+        tags: ['Huéspedes'],
+        summary: 'Archiva un huésped (borrado lógico)',
+        description:
+          'Marca el huésped como `activo = false` sin borrar datos: sus reservas se conservan ' +
+          'y quedan fuera del listado y del detalle. No se pueden crear ni asignar reservas ' +
+          'nuevas a un huésped archivado.',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        responses: {
+          200: { description: 'Huésped archivado' },
           404: { $ref: '#/components/responses/Error404' },
         },
       },
@@ -652,12 +721,61 @@ const spec = {
       },
       Guest: {
         type: 'object',
+        properties: {
+          id: { type: 'integer' },
+          nombre: { type: 'string' },
+          email: { type: 'string', format: 'email' },
+          dni: {
+            type: 'string',
+            pattern: '^[A-Za-z0-9]{6,10}$',
+            description: 'Alfanumérico de 6 a 10 caracteres, único entre los huéspedes',
+          },
+          telefono: {
+            type: 'string',
+            nullable: true,
+            pattern: '^\\+?\\d{7,15}$',
+            description: 'Entre 7 y 15 dígitos, con `+` inicial opcional',
+          },
+          activo: {
+            type: 'boolean',
+            description: 'Por defecto `true`; `DELETE` lo pasa a `false` (borrado lógico)',
+            default: true,
+          },
+          createdAt: { type: 'string', format: 'date-time' },
+        },
+      },
+      GuestCreate: {
+        type: 'object',
         required: ['nombre', 'email', 'dni'],
         properties: {
           nombre: { type: 'string' },
-          email: { type: 'string' },
-          dni: { type: 'string' },
-          telefono: { type: 'string' },
+          email: { type: 'string', format: 'email' },
+          dni: { type: 'string', pattern: '^[A-Za-z0-9]{6,10}$' },
+          telefono: { type: 'string', pattern: '^\\+?\\d{7,15}$' },
+        },
+      },
+      GuestUpdate: {
+        type: 'object',
+        description: 'Todos los campos son opcionales; se envía al menos uno.',
+        properties: {
+          nombre: { type: 'string' },
+          email: { type: 'string', format: 'email' },
+          dni: { type: 'string', pattern: '^[A-Za-z0-9]{6,10}$' },
+          telefono: { type: 'string', pattern: '^\\+?\\d{7,15}$' },
+        },
+      },
+      GuestList: {
+        type: 'object',
+        properties: {
+          data: { type: 'array', items: { $ref: '#/components/schemas/Guest' } },
+          pagination: {
+            type: 'object',
+            properties: {
+              page: { type: 'integer' },
+              pageSize: { type: 'integer' },
+              total: { type: 'integer' },
+            },
+          },
         },
       },
       Room: {

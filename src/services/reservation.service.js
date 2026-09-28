@@ -33,9 +33,9 @@ async function ensureResourceExists(guestId, roomId) {
     );
   }
   if (guestId) {
-    const guest = await guestRepo.findById(guestId);
+    const guest = await guestRepo.findActiveById(guestId);
     if (!guest) {
-      throw new HttpError(422, 'VALIDATION_ERROR', 'El huésped no existe');
+      throw new HttpError(422, 'VALIDATION_ERROR', 'El huésped no existe o está archivado');
     }
   }
   return room;
@@ -224,7 +224,7 @@ async function updateReservation(id, data) {
 
   const roomId = data.roomId ?? existing.roomId;
   const guestId = data.guestId ?? existing.guestId;
-  const room = await ensureResourceExists(guestId, roomId);
+  const room = await ensureResourceExists(data.guestId, roomId);
   const stay = buildStay({
     checkIn: data.checkIn ? toDate(data.checkIn) : existing.checkIn,
     checkOut: data.checkOut ? toDate(data.checkOut) : existing.checkOut,

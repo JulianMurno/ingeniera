@@ -21,6 +21,7 @@ model Guest {
   email        String
   dni          String        @unique
   telefono     String?
+  activo       Boolean       @default(true)
   createdAt    DateTime      @default(now())
   reservations Reservation[]
 }

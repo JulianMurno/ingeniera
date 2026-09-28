@@ -177,4 +177,45 @@ describe('Documentación OpenAPI', () => {
       /email de cancelación/,
     );
   });
+
+  test('GET /guests documenta filtros, paginación y el sobre { data, pagination }', () => {
+    const params = queryParamNames(spec.paths['/guests'].get);
+
+    expect(params).toEqual(expect.arrayContaining(['dni', 'nombre', 'page', 'pageSize']));
+    expect(spec.paths['/guests'].get.responses[200].content['application/json'].schema).toEqual({
+      $ref: '#/components/schemas/GuestList',
+    });
+  });
+
+  test('PATCH /guests/{id} documenta edición, conflicto y error de validación', () => {
+    const { patch } = spec.paths['/guests/{id}'];
+
+    expect(patch.responses[200].content['application/json'].schema).toEqual({
+      $ref: '#/components/schemas/Guest',
+    });
+    expect(patch.responses[404]).toBeDefined();
+    expect(patch.responses[409]).toBeDefined();
+    expect(patch.responses[422]).toBeDefined();
+  });
+
+  test('DELETE /guests/{id} documenta el borrado lógico', () => {
+    const { delete: del } = spec.paths['/guests/{id}'];
+
+    expect(del.summary).toMatch(/lógico/);
+    expect(del.description).toMatch(/reservas se conservan/);
+    expect(del.responses[200]).toBeDefined();
+    expect(del.responses[404]).toBeDefined();
+  });
+
+  test('los schemas de huésped documentan activo, DNI y teléfono', () => {
+    const { schemas } = spec.components;
+
+    expect(schemas.Guest.properties.activo.default).toBe(true);
+    expect(schemas.Guest.properties.dni.pattern).toBe('^[A-Za-z0-9]{6,10}$');
+    expect(schemas.Guest.properties.telefono.pattern).toBe('^\\+?\\d{7,15}$');
+    expect(schemas.GuestCreate.required).toEqual(['nombre', 'email', 'dni']);
+    expect(schemas.GuestCreate.properties.dni.pattern).toBe('^[A-Za-z0-9]{6,10}$');
+    expect(schemas.GuestUpdate.required).toBeUndefined();
+    expect(schemas.GuestList.properties.data.items).toEqual({ $ref: '#/components/schemas/Guest' });
+  });
 });

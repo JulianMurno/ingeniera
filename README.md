@@ -46,8 +46,10 @@ Toda ruta protegida requiere `Authorization: Bearer <token>` (obtenido en `POST 
 | ------ | ---------------------------------- | ------------------------------------------------- | ------------- |
 | POST   | `/api/v1/auth/login`               | Inicia sesión y devuelve un JWT                   | público       |
 | POST   | `/api/v1/guests`                   | Registra un huésped                               | autenticado   |
-| GET    | `/api/v1/guests?dni=&nombre=`      | Lista huéspedes (filtros opcionales)              | autenticado   |
+| GET    | `/api/v1/guests?dni=&nombre=&page=&pageSize=` | Lista huéspedes activos (filtros y paginación) | autenticado   |
 | GET    | `/api/v1/guests/{id}`              | Detalle de huésped                                | autenticado   |
+| PATCH  | `/api/v1/guests/{id}`              | Modifica un huésped                               | autenticado   |
+| DELETE | `/api/v1/guests/{id}`              | Archiva un huésped (borrado lógico)               | autenticado   |
 | POST   | `/api/v1/rooms`                    | Registra una habitación                           | ADMINISTRADOR |
 | GET    | `/api/v1/rooms`                    | Lista habitaciones (filtros y paginación)         | autenticado   |
 | GET    | `/api/v1/rooms/{id}`               | Detalle de habitación                            | autenticado   |
@@ -108,6 +110,7 @@ ocupación se deriva de las reservas `CONFIRMADA`.
 
 | Regla                                                | Código de error |
 | ---------------------------------------------------- | --------------- |
+| Huésped inexistente o archivado                     | `422`           |
 | Habitación en `MANTENIMIENTO`                        | `409`           |
 | Ocupación de reservas solapadas > `Room.capacidad`   | `409`           |
 | `adultos + menores` > `Room.capacidad`                | `422`           |
@@ -131,6 +134,44 @@ con el motivo y la multa aplicada.
 
 Sin `SMTP_URL` el transporte por defecto es `log`: el email se escribe en la consola y no hace
 falta SMTP ni configuración extra (es lo que usan los tests).
+
+## Huéspedes
+
+| Campo      | Tipo      | Reglas                                                                    |
+| ---------- | --------- | ------------------------------------------------------------------------- |
+| `nombre`   | `string`  | Obligatorio                                                              |
+| `email`    | `string`  | Obligatorio, formato de email                                             |
+| `dni`      | `string`  | Obligatorio, alfanumérico de 6 a 10 caracteres, único (`409` si se repite) |
+| `telefono` | `string?` | Opcional; de 7 a 15 dígitos, con `+` inicial opcional                     |
+| `activo`   | `bool`    | Por defecto `true`; `DELETE` lo pasa a `false`                            |
+
+`PATCH /guests/{id}` actualiza solo los campos enviados y revalida el email. Si el `dni` cambia
+comprueba su unicidad **excluyendo al propio huésped**, así que reenviar el mismo `dni` no
+responde `409`. Un body's vacío responde `422`.
+
+### Baja lógica
+
+`DELETE /guests/{id}` no borra la fila: marca `activo = false`. De ahí se derivan las reglas:
+
+- El huésped sale de `GET /guests` y `GET /guests/{id}` responde `404` (no hay endpoint para
+  reactivarlo ni para listar archivados).
+- **Las reservas se conservan** y siguen siendo consultables y modificables; el historial no se
+  destruye porque la baja no toca la fila.
+- No se pueden crear reservas ni asignar un huésped archivado al modificar una reserva (`422`).
+  Editar otros campos de una reserva ya existente de un huésped archivado sí se permite.
+
+Como la restricción `dni` es única en la base, un DNI de un huésped archivado no se puede reusar:
+la unicidad se respeta entre todos los huéspedes, no solo entre los activos.
+
+### Filtros de `GET /guests`
+
+Todos los filtros son opcionales y combinables; la respuesta es `{ data, pagination }`:
+
+| Parámetro           | Efecto                                              |
+| ------------------- | --------------------------------------------------- |
+| `dni`               | Coincidencia parcial del DNI                        |
+| `nombre`            | Coincidencia parcial del nombre                     |
+| `page` / `pageSize` | Paginación (por defecto `1` / `10`, máximo `100`)   |
 
 ## Habitaciones
 
@@ -223,6 +264,7 @@ usa `reservation.service` para el `total` al crear y al modificar una reserva.
 ## Convenciones
 
 - Prefijo de versión: `/api/v1`; recursos en plural.
+- El borrado de huéspedes es lógico (`activo = false`): conserva las reservas y saca al huésped del listado y del detalle.
 - Códigos: `200`, `201`, `400`, `401`, `403`, `404`, `409` (duplicado, solape o transición inválida), `422` (validación).
 - Error uniforme: `{ "error": { "code", "message", "details" } }`.
 - Fechas ISO `YYYY-MM-DD`; dinero en enteros (unidad base); tarifa por noche.
