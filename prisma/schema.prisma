@@ -12,7 +12,16 @@ model User {
   username  String   @unique
   password  String
   rol       String
+  activo    Boolean  @default(true)
   createdAt DateTime @default(now())
+}
+
+model TokenInvalidado {
+  id        Int      @id @default(autoincrement())
+  jti       String   @unique
+  expiraEn  DateTime
+
+  @@index([expiraEn])
 }
 
 model Guest {

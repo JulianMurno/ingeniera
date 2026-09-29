@@ -7,7 +7,7 @@ Sistema de reservas de hotel con API REST (Node.js + Express + Prisma + SQLite).
 - **Node.js** (LTS) + **Express**
 - **Prisma** + **SQLite** (local, migrable a PostgreSQL)
 - **Zod** para validación de entrada
-- **JWT** (jsonwebtoken) + **bcrypt** para autenticación
+- **JWT** (jsonwebtoken, con expiración configurable e invalidación por logout) + **bcrypt** para autenticación
 - **nodemailer** para los emails de confirmación y cancelación (transporte `log` si no hay SMTP)
 - **OpenAPI / Swagger UI** (`/api/docs`)
 - **Jest + Supertest** para tests · **ESLint + Prettier** para calidad
@@ -40,11 +40,17 @@ La API queda en `http://localhost:3000/api/v1` y los docs en `http://localhost:3
 
 ## Endpoints
 
-Toda ruta protegida requiere `Authorization: Bearer <token>` (obtenido en `POST /auth/login`). La gestión de habitaciones exige rol `ADMINISTRADOR`.
+Toda ruta protegida requiere `Authorization: Bearer <token>` (obtenido en `POST /auth/login`). La gestión de habitaciones y de usuarios exige rol `ADMINISTRADOR`.
 
 | Método | Ruta                               | Descripción                                       | Rol           |
 | ------ | ---------------------------------- | ------------------------------------------------- | ------------- |
 | POST   | `/api/v1/auth/login`               | Inicia sesión y devuelve un JWT                   | público       |
+| POST   | `/api/v1/auth/logout`              | Cierra sesión e invalida el token presentado      | autenticado   |
+| PATCH  | `/api/v1/auth/password`            | Cambia la contraseña propia                      | autenticado   |
+| POST   | `/api/v1/users`                    | Registra un usuario del personal                  | ADMINISTRADOR |
+| GET    | `/api/v1/users`                    | Lista los usuarios del personal                   | autenticado   |
+| PATCH  | `/api/v1/users/{id}`               | Modifica username, rol, contraseña o `activo`     | ADMINISTRADOR |
+| DELETE | `/api/v1/users/{id}`               | Desactiva un usuario (borrado lógico)            | ADMINISTRADOR |
 | POST   | `/api/v1/guests`                   | Registra un huésped                               | autenticado   |
 | GET    | `/api/v1/guests?dni=&nombre=&page=&pageSize=` | Lista huéspedes activos (filtros y paginación) | autenticado   |
 | GET    | `/api/v1/guests/{id}`              | Detalle de huésped                                | autenticado   |
@@ -71,6 +77,66 @@ Toda ruta protegida requiere `Authorization: Bearer <token>` (obtenido en `POST 
 | POST   | `/api/v1/reservations/{id}/checkin` | Registra el check-in (`EN_CURSO`)               | autenticado   |
 | POST   | `/api/v1/reservations/{id}/checkout` | Registra el check-out (`FINALIZADA`)            | autenticado   |
 | POST   | `/api/v1/reservations/{id}/no-show` | Marca `NO_SHOW` y libera el rango               | autenticado   |
+
+## Autenticación y sesión
+
+Los tokens JWT se emiten con un `jti` (uuid) único y expiran según `JWT_EXPIRES_IN`.
+
+| Variable         | Por defecto | Efecto                                                                             |
+| ---------------- | ----------- | ---------------------------------------------------------------------------------- |
+| `JWT_SECRET`     | —           | Clave de firma de los tokens                                                       |
+| `JWT_EXPIRES_IN` | `8h`        | Vida del token emitido (acepta `15m`, `8h`, `2d`; un valor inválido cae en el por defecto) |
+
+### Reglas de sesión
+
+| Método | Ruta               | Rol         | Reglas                                                                  |
+| ------ | ------------------ | ----------- | ----------------------------------------------------------------------- |
+| POST   | `/auth/login`      | público     | Un usuario desactivado responde `401` sin emitir token                  |
+| POST   | `/auth/logout`     | autenticado | Inserta el `jti` del token en la denylist hasta su expiración           |
+| PATCH  | `/auth/password`   | autenticado | Exige `currentPassword` verificada con bcrypt; si falla, `401`          |
+
+- Un token **vencido** o **invalidado por logout** responde `401` en cualquier ruta protegida.
+- El logout caduca únicamente la sesión presentada: los demás tokens del mismo usuario siguen
+  válidos.
+- Cada logout limpia de forma perezosa de la denylist las filas ya expiradas, para que no crezca
+  sin límite.
+- `PATCH /auth/password` acepta `currentPassword` y `newPassword` (mínimo 6 caracteres y distinta de
+  la actual). La nueva se guarda hasheada con bcrypt.
+
+## Usuarios del personal
+
+CRUD de las cuentas que pueden acceder a la API. Las escrituras son exclusivas de `ADMINISTRADOR`;
+el listado solo exige autenticación. La contraseña **nunca** se devuelve en ninguna respuesta.
+
+| Campo      | Tipo     | Reglas                                                              |
+| ---------- | -------- | ------------------------------------------------------------------- |
+| `username` | `string` | Obligatorio, único (`409` si se repite), 3–50 caracteres            |
+| `password` | `string` | Obligatorio en el alta, mínimo 6 caracteres; se persiste con bcrypt |
+| `rol`      | `enum`   | `RECEPCIONISTA` \| `ADMINISTRADOR`                                  |
+| `activo`   | `bool`   | Por defecto `true`; `DELETE` lo pasa a `false` (borrado lógico)    |
+
+| Método | Ruta          | Rol           | Notas                                                              |
+| ------ | ------------- | ------------- | ------------------------------------------------------------------ |
+| POST   | `/users`      | ADMINISTRADOR | Username duplicado `409`; datos inválidos `422`                    |
+| GET    | `/users`      | autenticado   | Devuelve `{ data }` e incluye también a los desactivados           |
+| PATCH  | `/users/{id}` | ADMINISTRADOR | Edita `username`, `rol`, `password` o `activo`; inexistente `404`  |
+| DELETE | `/users/{id}` | ADMINISTRADOR | Desactiva; inexistente `404`; uno mismo `409`                     |
+
+`PATCH /users/{id}` actualiza solo los campos enviados. Si el `username` cambia se comprueba su
+unicidad **excluyendo al propio usuario**, así que reenviar el mismo valor no responde `409`. Un body
+vacío responde `422`. Enviar `password` **restablece** la contraseña de otro usuario sin conocer la
+anterior; un `RECEPCIONISTA` que lo intenta recibe `403`.
+
+### Baja lógica y reactivación
+
+`DELETE /users/{id}` no borra la fila: marca `activo = false`. De ahí se derivan las reglas:
+
+- El usuario deja de poder iniciar sesión (`401`) pero **se conserva su historial**.
+- Sigue apareciendo en `GET /users` con `activo: false`.
+- Se reactiva con `PATCH /users/{id}` enviando `activo: true`; a partir de ahí vuelve a iniciar
+  sesión.
+- El `username` sigue siendo único entre los usuarios desactivados, así que no se puede reutilizar.
+- Un administrador no puede desactivar su propia cuenta (`409`), para no quedarse sin acceso.
 
 ## Reservas
 
@@ -264,7 +330,8 @@ usa `reservation.service` para el `total` al crear y al modificar una reserva.
 ## Convenciones
 
 - Prefijo de versión: `/api/v1`; recursos en plural.
-- El borrado de huéspedes es lógico (`activo = false`): conserva las reservas y saca al huésped del listado y del detalle.
+- El borrado de huéspedes y de usuarios es lógico (`activo = false`): conserva el historial y saca el recurso del uso normal sin destruir datos.
+- Los tokens JWT expiran (`JWT_EXPIRES_IN`), llevan un `jti` y se pueden invalidar por logout con una denylist en `TokenInvalidado`.
 - Códigos: `200`, `201`, `400`, `401`, `403`, `404`, `409` (duplicado, solape o transición inválida), `422` (validación).
 - Error uniforme: `{ "error": { "code", "message", "details" } }`.
 - Fechas ISO `YYYY-MM-DD`; dinero en enteros (unidad base); tarifa por noche.

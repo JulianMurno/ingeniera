@@ -6,14 +6,30 @@ const spec = {
     title: 'Sistema de Reservas de Hotel - MVP',
     version: '1.0.0',
     description:
-      'API del MVP de reservas: autenticación, huéspedes, habitaciones, tarifas, disponibilidad y ' +
-      'reservas. El ciclo de vida de una reserva es `CONFIRMADA → EN_CURSO → FINALIZADA`, con las ' +
-      'salidas `CANCELADA` y `NO_SHOW`. Al crear y al cancelar una reserva se envía un email al ' +
-      'huésped (transporte `log` por defecto, SMTP si se define `SMTP_URL`).',
+      'API del MVP de reservas: autenticación, usuarios del personal, huéspedes, habitaciones, ' +
+      'tarifas, disponibilidad y reservas. El ciclo de vida de una reserva es ' +
+      '`CONFIRMADA → EN_CURSO → FINALIZADA`, con las salidas `CANCELADA` y `NO_SHOW`. Al crear y ' +
+      'al cancelar una reserva se envía un email al huésped (transporte `log` por defecto, SMTP ' +
+      'si se define `SMTP_URL`).',
   },
   servers: [{ url: '/api/v1' }],
   tags: [
-    { name: 'Auth' },
+    {
+      name: 'Auth',
+      description:
+        'Los tokens JWT se emiten con expiración configurable por `JWT_EXPIRES_IN` (por defecto ' +
+        '`8h`) e incluyen un `jti` único. `POST /auth/logout` invalida el token presentado ' +
+        '(denylist por `jti`): a partir de ese momento el mismo token responde `401` aunque no ' +
+        'haya vencido. Los usuarios desactivados no pueden iniciar sesión.',
+    },
+    {
+      name: 'Usuarios',
+      description:
+        'Gestión del personal del hotel. Las escrituras (alta, edición y desactivación) son ' +
+        'exclusivas del rol `ADMINISTRADOR`; el listado requiere cualquier usuario autenticado. ' +
+        'La contraseña nunca se devuelve. `DELETE` desactiva al usuario (`activo = false`) sin ' +
+        'borrar la fila, y `PATCH` con `activo: true` lo reactiva.',
+    },
     {
       name: 'Huéspedes',
       description:
@@ -38,6 +54,10 @@ const spec = {
       post: {
         tags: ['Auth'],
         summary: 'Inicia sesión y obtiene un token JWT',
+        description:
+          'El token emitido expira según `JWT_EXPIRES_IN` (por defecto `8h`) e incluye un `jti` ' +
+          'único que permite invalidarlo con `POST /auth/logout`. Un usuario desactivado ' +
+          '(`activo = false`) responde `401` sin emitir token.',
         requestBody: {
           required: true,
           content: {
@@ -56,6 +76,151 @@ const spec = {
             },
           },
           401: { $ref: '#/components/responses/Error401' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+    },
+    '/auth/logout': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Cierra sesión e invalida el token presentado',
+        description:
+          'Inserta el `jti` del token en la denylist hasta su fecha de expiración. Reutilizar ese ' +
+          'token en una ruta protegida responde `401`. Solo caduca la sesión presentada: los ' +
+          'demás tokens del mismo usuario siguen siendo válidos.',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: { description: 'Sesión cerrada' },
+          401: { $ref: '#/components/responses/Error401' },
+        },
+      },
+    },
+    '/auth/password': {
+      patch: {
+        tags: ['Auth'],
+        summary: 'Cambia la contraseña del usuario autenticado',
+        description:
+          'Verifica la contraseña actual con bcrypt antes de rehashear la nueva. Si la actual es ' +
+          'incorrecta responde `401` y no cambia nada. La nueva debe tener al menos 6 caracteres ' +
+          'y ser distinta de la actual.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/ChangePasswordRequest' },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Contraseña actualizada',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/User' } } },
+          },
+          401: { $ref: '#/components/responses/Error401' },
+          404: { $ref: '#/components/responses/Error404' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+    },
+    '/users': {
+      post: {
+        tags: ['Usuarios'],
+        summary: 'Registra un usuario del personal (solo Administrador)',
+        description:
+          'El `username` es único entre todos los usuarios, incluidos los desactivados: ' +
+          'repetirlo responde `409`. El usuario nace `activo = true` y la contraseña se persiste ' +
+          'hasheada con bcrypt; nunca se devuelve en la respuesta.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/UserCreate' },
+            },
+          },
+        },
+        responses: {
+          201: {
+            description: 'Usuario creado',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/User' } } },
+          },
+          401: { $ref: '#/components/responses/Error401' },
+          403: { $ref: '#/components/responses/Error403' },
+          409: { $ref: '#/components/responses/Error409' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+      get: {
+        tags: ['Usuarios'],
+        summary: 'Lista los usuarios del personal',
+        description:
+          'Requiere autenticación pero no rol concreto. Incluye también a los usuarios ' +
+          'desactivados y nunca expone contraseñas.',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Usuarios del personal',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/UserList' },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Error401' },
+        },
+      },
+    },
+    '/users/{id}': {
+      patch: {
+        tags: ['Usuarios'],
+        summary: 'Modifica un usuario del personal (solo Administrador)',
+        description:
+          'Actualiza solo los campos enviados: `username`, `rol`, `password` o `activo`. ' +
+          'Enviar `password` restablece la contraseña del usuario sin conocer la anterior. Si el ' +
+          '`username` cambia se comprueba su unicidad excluyendo al propio usuario, así que ' +
+          'reenviar el mismo valor no responde `409`. `activo: true` reactiva un usuario ' +
+          'desactivado. Un body vacío responde `422` y un id inexistente `404`.',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/UserUpdate' },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Usuario actualizado',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/User' } } },
+          },
+          401: { $ref: '#/components/responses/Error401' },
+          403: { $ref: '#/components/responses/Error403' },
+          404: { $ref: '#/components/responses/Error404' },
+          409: { $ref: '#/components/responses/Error409' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+      delete: {
+        tags: ['Usuarios'],
+        summary: 'Desactiva un usuario del personal (borrado lógico, solo Administrador)',
+        description:
+          'Marca el usuario como `activo = false` sin borrar la fila: se conserva su historial y ' +
+          'deja de poder iniciar sesión (`401`). Se reactiva con `PATCH /users/{id}` enviando ' +
+          '`activo: true`. El administrador no puede desactivar su propio usuario (`409`).',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        responses: {
+          200: {
+            description: 'Usuario desactivado',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/User' } } },
+          },
+          401: { $ref: '#/components/responses/Error401' },
+          403: { $ref: '#/components/responses/Error403' },
+          404: { $ref: '#/components/responses/Error404' },
+          409: { $ref: '#/components/responses/Error409' },
           422: { $ref: '#/components/responses/Error422' },
         },
       },
@@ -704,6 +869,67 @@ const spec = {
         },
       },
       Rol: { type: 'string', enum: ['RECEPCIONISTA', 'ADMINISTRADOR'] },
+      User: {
+        type: 'object',
+        description: 'Usuario del personal. La contraseña nunca se devuelve.',
+        properties: {
+          id: { type: 'integer' },
+          username: {
+            type: 'string',
+            description: 'Único entre todos los usuarios, incluidos los desactivados',
+          },
+          rol: { $ref: '#/components/schemas/Rol' },
+          activo: {
+            type: 'boolean',
+            description: 'Por defecto `true`; `DELETE` lo pasa a `false` (borrado lógico)',
+            default: true,
+          },
+          createdAt: { type: 'string', format: 'date-time' },
+        },
+      },
+      UserCreate: {
+        type: 'object',
+        required: ['username', 'password', 'rol'],
+        properties: {
+          username: { type: 'string', minLength: 3, maxLength: 50 },
+          password: { type: 'string', format: 'password', minLength: 6 },
+          rol: { $ref: '#/components/schemas/Rol' },
+        },
+      },
+      UserUpdate: {
+        type: 'object',
+        description: 'Todos los campos son opcionales; se envía al menos uno.',
+        properties: {
+          username: { type: 'string', minLength: 3, maxLength: 50 },
+          password: {
+            type: 'string',
+            format: 'password',
+            minLength: 6,
+            description: 'Restablece la contraseña sin conocer la anterior (solo Administrador)',
+          },
+          rol: { $ref: '#/components/schemas/Rol' },
+          activo: { type: 'boolean', description: '`true` reactiva un usuario desactivado' },
+        },
+      },
+      UserList: {
+        type: 'object',
+        properties: {
+          data: { type: 'array', items: { $ref: '#/components/schemas/User' } },
+        },
+      },
+      ChangePasswordRequest: {
+        type: 'object',
+        required: ['currentPassword', 'newPassword'],
+        properties: {
+          currentPassword: { type: 'string', format: 'password', minLength: 1 },
+          newPassword: {
+            type: 'string',
+            format: 'password',
+            minLength: 6,
+            description: 'Debe ser distinta de la actual',
+          },
+        },
+      },
       RoomType: { type: 'string', enum: ['SINGLE', 'DOBLE', 'SUITE'] },
       EstadoHabitacion: { type: 'string', enum: ['DISPONIBLE', 'MANTENIMIENTO'] },
       EstadoReserva: {

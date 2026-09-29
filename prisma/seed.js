@@ -9,14 +9,14 @@ async function main() {
 
   await prisma.user.upsert({
     where: { username: 'admin' },
-    update: {},
-    create: { username: 'admin', password, rol: 'ADMINISTRADOR' },
+    update: { activo: true },
+    create: { username: 'admin', password, rol: 'ADMINISTRADOR', activo: true },
   });
 
   await prisma.user.upsert({
     where: { username: 'recepcionista' },
-    update: {},
-    create: { username: 'recepcionista', password, rol: 'RECEPCIONISTA' },
+    update: { activo: true },
+    create: { username: 'recepcionista', password, rol: 'RECEPCIONISTA', activo: true },
   });
 
   console.log('Usuarios sembrados: admin (ADMINISTRADOR) y recepcionista (RECEPCIONISTA)');

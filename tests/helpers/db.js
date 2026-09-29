@@ -16,6 +16,7 @@ async function resetDb() {
   await prisma.weekdayRate.deleteMany();
   await prisma.room.deleteMany();
   await prisma.guest.deleteMany();
+  await prisma.tokenInvalidado.deleteMany();
   await prisma.user.deleteMany();
 
   const password = bcrypt.hashSync(TEST_PASSWORD, 10);
@@ -27,6 +28,16 @@ async function resetDb() {
   });
 
   cachedTokens = {};
+}
+
+async function freshTokenFor(username) {
+  const res = await request(app)
+    .post('/api/v1/auth/login')
+    .send({ username, password: TEST_PASSWORD });
+  if (res.status !== 200) {
+    throw new Error(`Login de test falló para ${username}: ${res.status}`);
+  }
+  return res.body.token;
 }
 
 async function tokenFor(username) {
@@ -86,6 +97,7 @@ module.exports = {
   prisma,
   resetDb,
   tokenFor,
+  freshTokenFor,
   authHeader,
   TEST_PASSWORD,
   withEnv,

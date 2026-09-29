@@ -61,6 +61,15 @@ describe('Documentación OpenAPI', () => {
     expect(res.text).toContain('swagger-ui');
   });
 
+  test('/api/docs publica los endpoints de usuarios y sesión', async () => {
+    const res = await request(app).get('/api/docs/swagger-ui-init.js');
+
+    expect(res.status).toBe(200);
+    for (const path of ['/auth/logout', '/auth/password', '/users', '/users/{id}']) {
+      expect(res.text).toContain(`"${path}"`);
+    }
+  });
+
   test('GET /availability documenta los parámetros de ocupantes y horarios', () => {
     const params = queryParamNames(spec.paths['/availability'].get);
 
@@ -217,5 +226,75 @@ describe('Documentación OpenAPI', () => {
     expect(schemas.GuestCreate.properties.dni.pattern).toBe('^[A-Za-z0-9]{6,10}$');
     expect(schemas.GuestUpdate.required).toBeUndefined();
     expect(schemas.GuestList.properties.data.items).toEqual({ $ref: '#/components/schemas/Guest' });
+  });
+
+  test('la expiración de token y el logout por denylist están documentados', () => {
+    const tag = spec.tags.find((t) => t.name === 'Auth');
+
+    expect(tag.description).toMatch(/JWT_EXPIRES_IN/);
+    expect(tag.description).toMatch(/jti/);
+    expect(spec.paths['/auth/login'].post.description).toMatch(/JWT_EXPIRES_IN/);
+    expect(spec.paths['/auth/logout'].post).toBeDefined();
+    expect(spec.paths['/auth/logout'].post.responses[200]).toBeDefined();
+    expect(spec.paths['/auth/logout'].post.responses[401]).toBeDefined();
+  });
+
+  test('PATCH /auth/password documenta el cambio de contraseña propia', () => {
+    const { patch } = spec.paths['/auth/password'];
+
+    expect(patch.responses[200].content['application/json'].schema).toEqual({
+      $ref: '#/components/schemas/User',
+    });
+    expect(patch.responses[401]).toBeDefined();
+    expect(patch.responses[422]).toBeDefined();
+    expect(patch.requestBody.content['application/json'].schema).toEqual({
+      $ref: '#/components/schemas/ChangePasswordRequest',
+    });
+    expect(spec.components.schemas.ChangePasswordRequest.required).toEqual([
+      'currentPassword',
+      'newPassword',
+    ]);
+  });
+
+  test('el módulo de usuarios está documentado con sus endpoints', () => {
+    expect(spec.tags.map((tag) => tag.name)).toContain('Usuarios');
+    expect(spec.paths['/users'].post).toBeDefined();
+    expect(spec.paths['/users'].get).toBeDefined();
+    expect(spec.paths['/users/{id}'].patch).toBeDefined();
+    expect(spec.paths['/users/{id}'].delete).toBeDefined();
+
+    expect(spec.paths['/users'].post.responses[201]).toBeDefined();
+    expect(spec.paths['/users'].post.responses[403]).toBeDefined();
+    expect(spec.paths['/users'].post.responses[409]).toBeDefined();
+    expect(spec.paths['/users'].get.responses[200].content['application/json'].schema).toEqual({
+      $ref: '#/components/schemas/UserList',
+    });
+    expect(spec.paths['/users/{id}'].patch.responses[404]).toBeDefined();
+    expect(spec.paths['/users/{id}'].patch.responses[403]).toBeDefined();
+    expect(spec.paths['/users/{id}'].delete.responses[404]).toBeDefined();
+  });
+
+  test('DELETE /users/{id} documenta el borrado lógico y la reactivación', () => {
+    const { delete: del } = spec.paths['/users/{id}'];
+
+    expect(del.summary).toMatch(/borrado lógico/);
+    expect(del.description).toMatch(/activo = false/);
+    expect(del.description).toMatch(/reactiva/);
+    expect(del.responses[200].content['application/json'].schema).toEqual({
+      $ref: '#/components/schemas/User',
+    });
+    expect(del.responses[409]).toBeDefined();
+  });
+
+  test('los schemas de usuario no exponen la contraseña', () => {
+    const { schemas } = spec.components;
+
+    expect(schemas.User.properties.activo.default).toBe(true);
+    expect(schemas.User.properties.password).toBeUndefined();
+    expect(schemas.UserList.properties.data.items).toEqual({ $ref: '#/components/schemas/User' });
+    expect(schemas.UserCreate.required).toEqual(['username', 'password', 'rol']);
+    expect(schemas.UserCreate.properties.password.format).toBe('password');
+    expect(schemas.UserUpdate.required).toBeUndefined();
+    expect(schemas.UserUpdate.properties.activo).toBeDefined();
   });
 });
