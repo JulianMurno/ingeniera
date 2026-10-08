@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs');
 
 const userRepo = require('../repositories/user.repository');
 const { HttpError } = require('../lib/httpError');
+const { audit, ACCIONES, RECURSOS } = require('../lib/audit');
 
 const SALT_ROUNDS = 10;
 
@@ -22,17 +23,32 @@ async function assertUsernameAvailable(username, excludeId) {
   }
 }
 
-async function createUser(data) {
+async function createUser(data, actor = null) {
   await assertUsernameAvailable(data.username);
   const password = await bcrypt.hash(data.password, SALT_ROUNDS);
-  return userRepo.create({ username: data.username, password, rol: data.rol, activo: true });
+  const user = await userRepo.create({
+    username: data.username,
+    password,
+    rol: data.rol,
+    activo: true,
+  });
+
+  await audit({
+    actor,
+    accion: ACCIONES.CREAR,
+    recurso: RECURSOS.USUARIO,
+    recursoId: user.id,
+    detalle: { username: user.username, rol: user.rol },
+  });
+
+  return user;
 }
 
 function listUsers() {
   return userRepo.findMany();
 }
 
-async function updateUser(id, data) {
+async function updateUser(id, data, actor = null) {
   const existing = await getExisting(id);
 
   if (data.username !== undefined && data.username !== existing.username) {
@@ -47,15 +63,35 @@ async function updateUser(id, data) {
     changes.password = await bcrypt.hash(data.password, SALT_ROUNDS);
   }
 
-  return userRepo.update(id, changes);
+  const user = await userRepo.update(id, changes);
+
+  await audit({
+    actor,
+    accion: ACCIONES.MODIFICAR,
+    recurso: RECURSOS.USUARIO,
+    recursoId: id,
+    detalle: { campos: Object.keys(changes), username: user.username, rol: user.rol },
+  });
+
+  return user;
 }
 
-async function deactivateUser(id, requesterId) {
+async function deactivateUser(id, actor = null) {
   const existing = await getExisting(id);
-  if (existing.id === requesterId) {
+  if (actor && existing.id === Number(actor.id)) {
     throw new HttpError(409, 'CONFLICT', 'El administrador no puede desactivar su propio usuario');
   }
-  return userRepo.setActivo(id, false);
+  const user = await userRepo.setActivo(id, false);
+
+  await audit({
+    actor,
+    accion: ACCIONES.ELIMINAR,
+    recurso: RECURSOS.USUARIO,
+    recursoId: id,
+    detalle: { username: user.username, activo: false },
+  });
+
+  return user;
 }
 
 module.exports = { createUser, listUsers, updateUser, deactivateUser };

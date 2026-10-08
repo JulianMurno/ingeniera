@@ -10,7 +10,8 @@ const spec = {
       'tarifas, disponibilidad y reservas. El ciclo de vida de una reserva es ' +
       '`CONFIRMADA → EN_CURSO → FINALIZADA`, con las salidas `CANCELADA` y `NO_SHOW`. Al crear y ' +
       'al cancelar una reserva se envía un email al huésped (transporte `log` por defecto, SMTP ' +
-      'si se define `SMTP_URL`).',
+      'si se define `SMTP_URL`). Incluye además pagos y facturación, reportes de gestión, ' +
+      'health check y auditoría de operaciones sensibles.',
   },
   servers: [{ url: '/api/v1' }],
   tags: [
@@ -47,6 +48,38 @@ const spec = {
         'Envío de emails al huésped. No expone endpoints: se dispara al crear una reserva ' +
         '(confirmación, con el código, las fechas y la habitación) y al cancelarla (con el motivo y ' +
         'la multa). El transporte es `log` salvo que se defina `SMTP_URL`.',
+    },
+    {
+      name: 'Pagos',
+      description:
+        'Pagos registrados contra una reserva y factura derivada. El pago se registra manualmente ' +
+        '(sin pasarela): `monto` entero en la unidad base, `metodo` y `pagadoEn`. El estado de pago ' +
+        'de la reserva (`PENDIENTE`, `PARCIAL`, `PAGADA`) y el saldo pendiente se derivan de la suma ' +
+        'de sus pagos al consultar el detalle; no hay columna persistida. La factura se genera bajo ' +
+        'demanda a partir de la reserva y sus pagos (numeración local, sin tabla `Invoice`).',
+    },
+    {
+      name: 'Reportes',
+      description:
+        'Ocupación, ingresos y reservas por tipo de habitación para un rango de fechas. Ocupación y ' +
+        'reservas por tipo cuentan reservas vigentes (`CONFIRMADA`, `EN_CURSO`, `FINALIZADA`) en el ' +
+        'rango de noches `[checkIn, checkOut)`; los ingresos suman los pagos por fecha de cobro ' +
+        '(`pagadoEn`) con el rango inclusivo de ambas fechas. Un rango inválido responde `422`.',
+    },
+    {
+      name: 'Salud',
+      description:
+        'Estado de la API y de la base de datos. `GET /health` es público (sin token) y ejecuta ' +
+        '`SELECT 1` contra la base: `200 { status: "ok", db: "ok" }` o `503` con el componente ' +
+        'caído. También queda publicado como `/api/v1/health`.',
+    },
+    {
+      name: 'Auditoría',
+      description:
+        'Trazabilidad de operaciones sensibles: creación, modificación y cancelación de reservas y ' +
+        'gestión de habitaciones y usuarios, con autor, acción, recurso, fecha y detalle en JSON. ' +
+        'La consulta es exclusiva del rol `ADMINISTRADOR` y admite filtros por usuario, acción, ' +
+        'recurso y rango de fechas, con paginación.',
     },
   ],
   paths: {
@@ -801,6 +834,228 @@ const spec = {
         },
       },
     },
+    '/reservations/{id}/payments': {
+      post: {
+        tags: ['Pagos'],
+        summary: 'Registra un pago contra una reserva',
+        description:
+          'Admite pagos parciales o totales. `monto` debe ser un entero positivo (unidad base de la ' +
+          'moneda) y `metodo` uno de `EFECTIVO`, `TARJETA` o `TRANSFERENCIA`. Si no se envía ' +
+          '`pagadoEn` se registra la fecha de hoy. La respuesta devuelve el estado de pago derivado ' +
+          '(`PENDIENTE`, `PARCIAL`, `PAGADA`) y el saldo pendiente de la reserva.',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/PaymentCreate' } },
+          },
+        },
+        responses: {
+          201: {
+            description: 'Pago registrado',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Payment' } } },
+          },
+          401: { $ref: '#/components/responses/Error401' },
+          404: { $ref: '#/components/responses/Error404' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+    },
+    '/reservations/{id}/invoices': {
+      get: {
+        tags: ['Pagos'],
+        summary: 'Genera la factura de una reserva',
+        description:
+          'Documento derivado (no persistido) armado con la estancia, la tarifa de la habitación, ' +
+          'el total, los pagos registrados, el total pagado y el saldo pendiente. La numeración es ' +
+          'local (`FAC-<código de la reserva>`) y no sigue una secuencia regulada.',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        responses: {
+          200: {
+            description: 'Factura generada',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/Invoice' } },
+            },
+          },
+          401: { $ref: '#/components/responses/Error401' },
+          404: { $ref: '#/components/responses/Error404' },
+        },
+      },
+    },
+    '/reports/ocupacion': {
+      get: {
+        tags: ['Reportes'],
+        summary: 'Ocupación del hotel para un rango de fechas',
+        description:
+          'Suma las noches ocupadas por reservas vigentes (`CONFIRMADA`, `EN_CURSO`, `FINALIZADA`) ' +
+          'en el rango `[checkIn, checkOut)` y las compara contra el total de habitaciones por ' +
+          'noche. El porcentaje se redondea a dos decimales.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: 'checkIn',
+            in: 'query',
+            required: true,
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'checkOut',
+            in: 'query',
+            required: true,
+            schema: { type: 'string', format: 'date' },
+          },
+        ],
+        responses: {
+          200: {
+            description: 'Reporte de ocupación',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/ReportOcupacion' } },
+            },
+          },
+          401: { $ref: '#/components/responses/Error401' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+    },
+    '/reports/ingresos': {
+      get: {
+        tags: ['Reportes'],
+        summary: 'Ingresos cobrados para un rango de fechas',
+        description:
+          'Suma los pagos por fecha de cobro (`pagadoEn`) con el rango inclusivo de ambas fechas y ' +
+          'desglosa el total por método de pago. Es una visión financiera: incluye los pagos de ' +
+          'cualquier reserva, sin filtrar por su estado.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: 'checkIn',
+            in: 'query',
+            required: true,
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'checkOut',
+            in: 'query',
+            required: true,
+            schema: { type: 'string', format: 'date' },
+          },
+        ],
+        responses: {
+          200: {
+            description: 'Reporte de ingresos',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/ReportIngresos' } },
+            },
+          },
+          401: { $ref: '#/components/responses/Error401' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+    },
+    '/reports/reservas-por-tipo': {
+      get: {
+        tags: ['Reportes'],
+        summary: 'Reservas por tipo de habitación para un rango de fechas',
+        description:
+          'Agrupa las reservas vigentes que se solapan con el rango `[checkIn, checkOut)` por el ' +
+          'tipo de su habitación e indica cuántas habitaciones hay de cada tipo.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: 'checkIn',
+            in: 'query',
+            required: true,
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'checkOut',
+            in: 'query',
+            required: true,
+            schema: { type: 'string', format: 'date' },
+          },
+        ],
+        responses: {
+          200: {
+            description: 'Reporte de reservas por tipo',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ReportReservasPorTipo' },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Error401' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+    },
+    '/health': {
+      get: {
+        tags: ['Salud'],
+        summary: 'Estado de la API y de la base de datos',
+        description:
+          'Endpoint público (sin token) que ejecuta `SELECT 1` contra la base. Se publica también en ' +
+          'la raíz del servidor como `GET /health`.',
+        responses: {
+          200: {
+            description: 'API y base operativas',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/HealthStatus' } },
+            },
+          },
+          503: {
+            description: 'Algún componente no responde; `db: "down"` indica la base caída',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/HealthStatus' } },
+            },
+          },
+        },
+      },
+    },
+    '/audit': {
+      get: {
+        tags: ['Auditoría'],
+        summary: 'Consulta los registros de auditoría',
+        description:
+          'Listado paginado de operaciones sensibles, ordenado del más reciente al más antiguo. ' +
+          'Filtros opcionales por usuario, acción, recurso y rango de fechas (`desde`/`hasta`, ' +
+          'inclusivo). Solo el rol `ADMINISTRADOR` puede consultar.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'userId', in: 'query', schema: { type: 'integer', minimum: 1 } },
+          {
+            name: 'accion',
+            in: 'query',
+            schema: { type: 'string', enum: ['CREAR', 'MODIFICAR', 'CANCELAR', 'ELIMINAR'] },
+          },
+          {
+            name: 'recurso',
+            in: 'query',
+            schema: { type: 'string', enum: ['RESERVA', 'HABITACION', 'USUARIO'] },
+          },
+          { name: 'desde', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'hasta', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+          {
+            name: 'pageSize',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 100, default: 10 },
+          },
+        ],
+        responses: {
+          200: {
+            description: 'Registros de auditoría paginados',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/AuditLogList' } },
+            },
+          },
+          401: { $ref: '#/components/responses/Error401' },
+          403: { $ref: '#/components/responses/Error403' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+    },
   },
   components: {
     securitySchemes: {
@@ -1118,6 +1373,25 @@ const spec = {
           },
           earlyCheckIn: { $ref: '#/components/schemas/EarlyCheckIn' },
           lateCheckOut: { $ref: '#/components/schemas/LateCheckOut' },
+          estadoPago: {
+            $ref: '#/components/schemas/EstadoPago',
+            description:
+              'Derivado de la suma de pagos. Solo se devuelve en el detalle ' +
+              '(`GET /reservations/{id}`)',
+          },
+          totalPagado: {
+            type: 'integer',
+            description: 'Suma de los pagos de la reserva; solo en el detalle',
+          },
+          saldoPendiente: {
+            type: 'integer',
+            description: 'Total menos lo pagado; solo en el detalle',
+          },
+          pagos: {
+            type: 'array',
+            description: 'Pagos registrados contra la reserva; solo en el detalle',
+            items: { $ref: '#/components/schemas/Payment' },
+          },
         },
       },
       ReservationCreate: {
@@ -1249,6 +1523,191 @@ const spec = {
           dia: { type: 'string', description: 'Nombre del día de la semana' },
           tarifa: { type: 'integer' },
           origen: { type: 'string', enum: ['WEEKDAY', 'SEASON', 'BASE'] },
+        },
+      },
+      EstadoPago: {
+        type: 'string',
+        enum: ['PENDIENTE', 'PARCIAL', 'PAGADA'],
+        description:
+          'Derivado de la suma de pagos contra el total de la reserva: sin pagos `PENDIENTE`, ' +
+          'pagos inferiores al total `PARCIAL` y pagos que cubren el total `PAGADA`. No se ' +
+          'persiste; se calcula al serializar la reserva.',
+      },
+      PaymentCreate: {
+        type: 'object',
+        required: ['monto', 'metodo'],
+        properties: {
+          monto: { type: 'integer', minimum: 1, description: 'Unidad base de la moneda' },
+          metodo: { type: 'string', enum: ['EFECTIVO', 'TARJETA', 'TRANSFERENCIA'] },
+          pagadoEn: {
+            type: 'string',
+            format: 'date',
+            description: 'Fecha del pago en `YYYY-MM-DD`; por defecto, hoy',
+          },
+        },
+      },
+      Payment: {
+        type: 'object',
+        properties: {
+          id: { type: 'integer' },
+          reservationId: { type: 'integer' },
+          monto: { type: 'integer', minimum: 1 },
+          metodo: { type: 'string', enum: ['EFECTIVO', 'TARJETA', 'TRANSFERENCIA'] },
+          pagadoEn: { type: 'string', format: 'date' },
+          createdAt: { type: 'string', format: 'date-time' },
+          estadoPago: { $ref: '#/components/schemas/EstadoPago' },
+          totalPagado: { type: 'integer', description: 'Suma de todos los pagos de la reserva' },
+          saldoPendiente: { type: 'integer', description: 'Total menos lo pagado, nunca negativo' },
+        },
+      },
+      Invoice: {
+        type: 'object',
+        description:
+          'Factura derivada de la reserva y sus pagos; no se persiste ni tiene numeración ' +
+          'secuencial regulada.',
+        properties: {
+          numero: { type: 'string', example: 'FAC-HR-6TN5ZZ' },
+          reservaId: { type: 'integer' },
+          codigo: { type: 'string', nullable: true },
+          emitidaEn: { type: 'string', format: 'date-time' },
+          estadoReserva: { $ref: '#/components/schemas/EstadoReserva' },
+          cliente: {
+            type: 'object',
+            properties: {
+              id: { type: 'integer' },
+              nombre: { type: 'string' },
+              dni: { type: 'string' },
+              email: { type: 'string', format: 'email' },
+            },
+          },
+          habitacion: {
+            type: 'object',
+            properties: {
+              id: { type: 'integer' },
+              numero: { type: 'string' },
+              tipo: { $ref: '#/components/schemas/RoomType' },
+              tarifaBase: { type: 'integer' },
+            },
+          },
+          estancia: {
+            type: 'object',
+            properties: {
+              checkIn: { type: 'string', format: 'date' },
+              checkOut: { type: 'string', format: 'date' },
+              noches: { type: 'integer' },
+              adultos: { type: 'integer' },
+              menores: { type: 'integer' },
+            },
+          },
+          tarifaPromedioPorNoche: { type: 'integer' },
+          total: { type: 'integer' },
+          pagos: { type: 'array', items: { $ref: '#/components/schemas/Payment' } },
+          totalPagado: { type: 'integer' },
+          saldoPendiente: { type: 'integer' },
+          estadoPago: { $ref: '#/components/schemas/EstadoPago' },
+        },
+      },
+      ReportOcupacion: {
+        type: 'object',
+        properties: {
+          checkIn: { type: 'string', format: 'date' },
+          checkOut: { type: 'string', format: 'date' },
+          habitaciones: { type: 'integer', description: 'Habitaciones del hotel' },
+          noches: { type: 'integer', description: 'Noches del rango consultado' },
+          nochesOcupadas: { type: 'integer', description: 'Noches ocupadas por reservas vigentes' },
+          nochesDisponibles: { type: 'integer' },
+          porcentajeOcupacion: { type: 'number', description: '0 a 100, dos decimales' },
+        },
+      },
+      ReportIngresos: {
+        type: 'object',
+        properties: {
+          checkIn: { type: 'string', format: 'date' },
+          checkOut: { type: 'string', format: 'date' },
+          total: { type: 'integer', description: 'Suma de pagos cobrados en el rango' },
+          cantidadPagos: { type: 'integer' },
+          porMetodo: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                metodo: { type: 'string' },
+                cantidad: { type: 'integer' },
+                total: { type: 'integer' },
+              },
+            },
+          },
+        },
+      },
+      ReportReservasPorTipo: {
+        type: 'object',
+        properties: {
+          checkIn: { type: 'string', format: 'date' },
+          checkOut: { type: 'string', format: 'date' },
+          noches: { type: 'integer' },
+          totalReservas: { type: 'integer' },
+          porTipo: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                tipo: { $ref: '#/components/schemas/RoomType' },
+                cantidad: {
+                  type: 'integer',
+                  description: 'Reservas vigentes del tipo en el rango',
+                },
+                habitaciones: { type: 'integer', description: 'Habitaciones del tipo' },
+              },
+            },
+          },
+        },
+      },
+      HealthStatus: {
+        type: 'object',
+        properties: {
+          status: { type: 'string', enum: ['ok', 'degraded'] },
+          api: { type: 'string', enum: ['ok'] },
+          db: { type: 'string', enum: ['ok', 'down'] },
+          timestamp: { type: 'string', format: 'date-time' },
+        },
+      },
+      AuditLog: {
+        type: 'object',
+        properties: {
+          id: { type: 'integer' },
+          userId: { type: 'integer' },
+          accion: { type: 'string', enum: ['CREAR', 'MODIFICAR', 'CANCELAR', 'ELIMINAR'] },
+          recurso: { type: 'string', enum: ['RESERVA', 'HABITACION', 'USUARIO'] },
+          recursoId: { type: 'string', nullable: true },
+          detalle: {
+            type: 'string',
+            nullable: true,
+            description: 'JSON serializado con el detalle de la operación',
+          },
+          createdAt: { type: 'string', format: 'date-time' },
+          user: {
+            type: 'object',
+            description: 'Autor de la operación',
+            properties: {
+              id: { type: 'integer' },
+              username: { type: 'string' },
+              rol: { $ref: '#/components/schemas/Rol' },
+            },
+          },
+        },
+      },
+      AuditLogList: {
+        type: 'object',
+        properties: {
+          data: { type: 'array', items: { $ref: '#/components/schemas/AuditLog' } },
+          pagination: {
+            type: 'object',
+            properties: {
+              page: { type: 'integer' },
+              pageSize: { type: 'integer' },
+              total: { type: 'integer' },
+            },
+          },
         },
       },
     },
