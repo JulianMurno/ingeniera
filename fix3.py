@@ -1,1 +1,0 @@
-with open('src/lib/housekeepingState.js', encoding='utf-8', errors='ignore') as f: s=f.read(); s = s.replace('Transici', 'T'); s = s.replace('Ta', 'T'); s = s.replace('invalida', 'inválida'); s = s.replace('n inv', 'n inv'); # brute force\ns = 'const err = new Error(Transición inválida:  ? );' if 'Error(' in s and '?' in s else s\n# easier: just write correct line\n

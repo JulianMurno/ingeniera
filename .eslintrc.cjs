@@ -1,4 +1,6 @@
 module.exports = {
+  root: true,
+  ignorePatterns: ['frontend/', 'dist/', 'node_modules/'],
   env: {
     node: true,
     jest: true,

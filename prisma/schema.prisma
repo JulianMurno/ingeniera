@@ -8,21 +8,22 @@ datasource db {
 }
 
 model User {
-  id                       Int                 @id @default(autoincrement())
-  username                 String              @unique
-  password                 String
-  rol                      String
-  activo                   Boolean             @default(true)
-  createdAt                DateTime            @default(now())
-  housekeepingTasksAsignado HousekeepingTask[] @relation("HousekeepingTaskAsignadoA")
+  id                        Int                 @id @default(autoincrement())
+  username                  String              @unique
+  password                  String
+  rol                       String
+  activo                    Boolean             @default(true)
+  createdAt                 DateTime            @default(now())
+  housekeepingTasksAsignado HousekeepingTask[]  @relation("HousekeepingTaskAsignadoA")
   maintenanceReportado      MaintenanceTicket[] @relation("MaintenanceTicketReportadoPor")
   maintenanceAsignado       MaintenanceTicket[] @relation("MaintenanceTicketAsignadoA")
+  auditLogs                 AuditLog[]
 }
 
 model TokenInvalidado {
-  id        Int      @id @default(autoincrement())
-  jti       String   @unique
-  expiraEn  DateTime
+  id       Int      @id @default(autoincrement())
+  jti      String   @unique
+  expiraEn DateTime
 
   @@index([expiraEn])
 }
@@ -39,41 +40,42 @@ model Guest {
 }
 
 model Room {
-  id                Int                 @id @default(autoincrement())
-  numero            String              @unique
-  tipo              String
-  tarifa            Int
-  estado            String              @default("DISPONIBLE")
-  capacidad         Int                 @default(1)
-  descripcion       String?
-  comodidades       String?
-  fotos             String?
-  createdAt         DateTime            @default(now())
-  reservations      Reservation[]
+  id                 Int                 @id @default(autoincrement())
+  numero             String              @unique
+  tipo               String
+  tarifa             Int
+  estado             String              @default("DISPONIBLE")
+  capacidad          Int                 @default(1)
+  descripcion        String?
+  comodidades        String?
+  fotos              String?
+  createdAt          DateTime            @default(now())
+  reservations       Reservation[]
   housekeepingTasks  HousekeepingTask[]
   maintenanceTickets MaintenanceTicket[]
 }
 
 model Reservation {
-  id                Int      @id @default(autoincrement())
+  id                Int       @id @default(autoincrement())
   guestId           Int
   roomId            Int
   checkIn           DateTime
   checkOut          DateTime
   noches            Int
   total             Int
-  estado            String   @default("CONFIRMADA")
-  adultos           Int      @default(1)
-  menores           Int      @default(0)
-  codigo            String?  @unique
+  estado            String    @default("CONFIRMADA")
+  adultos           Int       @default(1)
+  menores           Int       @default(0)
+  codigo            String?   @unique
   notas             String?
   motivoCancelacion String?
-  multaCancelacion  Int      @default(0)
-  earlyCheckIn      Boolean  @default(false)
-  lateCheckOut      Boolean  @default(false)
-  createdAt         DateTime @default(now())
-  guest             Guest    @relation(fields: [guestId], references: [id])
-  room              Room     @relation(fields: [roomId], references: [id])
+  multaCancelacion  Int       @default(0)
+  earlyCheckIn      Boolean   @default(false)
+  lateCheckOut      Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+  guest             Guest     @relation(fields: [guestId], references: [id])
+  room              Room      @relation(fields: [roomId], references: [id])
+  payments          Payment[]
 
   @@index([roomId, checkIn, checkOut])
   @@index([guestId])
@@ -139,4 +141,31 @@ model MaintenanceTicket {
 
   @@index([roomId, estado])
   @@index([estado, prioridad])
+}
+
+model Payment {
+  id            Int         @id @default(autoincrement())
+  reservationId Int
+  monto         Int
+  metodo        String
+  pagadoEn      DateTime
+  createdAt     DateTime    @default(now())
+  reservation   Reservation @relation(fields: [reservationId], references: [id])
+
+  @@index([pagadoEn])
+  @@index([reservationId])
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  accion    String
+  recurso   String
+  recursoId String?
+  detalle   String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([createdAt])
+  @@index([userId, accion])
 }
