@@ -17,6 +17,8 @@ const {
 } = require('../lib/reservationState');
 const { estadoMantenimiento } = require('../schemas/room.schema');
 const { HttpError } = require('../lib/httpError');
+const housekeepingService = require('./housekeeping.service');
+const { getHousekeepingBlockCheckIn } = require('../config/housekeepingRules');
 const { audit, ACCIONES, RECURSOS } = require('../lib/audit');
 const paymentService = require('./payment.service');
 
@@ -308,6 +310,17 @@ async function cambiarEstado(id, estado) {
 }
 
 async function checkInReservation(id) {
+  const reservation = await getReservation(id);
+  if (getHousekeepingBlockCheckIn()) {
+    const limpieza = await housekeepingService.getEstadoLimpieza(reservation.roomId);
+    if (limpieza !== 'LIMPIA') {
+      throw new HttpError(
+        409,
+        'HABITACION_NO_LIMPIA',
+        'La habitación no está limpia y el bloqueo de check-in está activo',
+      );
+    }
+  }
   return cambiarEstado(id, EN_CURSO);
 }
 

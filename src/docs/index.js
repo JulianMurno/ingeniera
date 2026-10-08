@@ -43,6 +43,23 @@ const spec = {
     { name: 'Disponibilidad' },
     { name: 'Reservas' },
     {
+      name: 'Housekeeping',
+      description:
+        'Programación y seguimiento de tareas de limpieza e inspección. Las tareas avanzan por ' +
+        '`PENDIENTE → EN_PROCESO → LIMPIA → EN_INSPECCION → INSPECCION_OK | INSPECCION_FALLA` (o ' +
+        '`CANCELADA`). El estado de limpieza de una habitación se deriva de su última tarea no ' +
+        'cancelada. Con `HOUSEKEEPING_BLOCK_CHECKIN=true` (default `false`) el check-in se bloquea ' +
+        'con `409 HABITACION_NO_LIMPIA` si la habitación no está `LIMPIA`.',
+    },
+    {
+      name: 'Mantenimiento',
+      description:
+        'Reporte y resolución de incidencias de mantenimiento por habitación, con el ciclo ' +
+        '`ABIERTO → EN_PROCESO → RESUELTO` (o `CANCELADO`, solo `ADMINISTRADOR`). Al resolver un ' +
+        'ticket se crea automáticamente una tarea de `INSPECCION` para la habitación si no hay ya ' +
+        'una inspección pendiente o en curso.',
+    },
+    {
       name: 'Notificaciones',
       description:
         'Envío de emails al huésped. No expone endpoints: se dispara al crear una reserva ' +
@@ -433,6 +450,9 @@ const spec = {
       get: {
         tags: ['Habitaciones'],
         summary: 'Obtiene una habitación por id',
+        description:
+          'Incluye `limpieza` (derivada de la última tarea de housekeeping no cancelada) y ' +
+          '`incidenciasAbiertas` (tickets de mantenimiento en `ABIERTO`/`EN_PROCESO`).',
         security: [{ bearerAuth: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
         responses: {
@@ -472,6 +492,23 @@ const spec = {
           403: { $ref: '#/components/responses/Error403' },
           404: { $ref: '#/components/responses/Error404' },
           409: { $ref: '#/components/responses/Error409' },
+        },
+      },
+    },
+    '/rooms/{id}/housekeeping': {
+      get: {
+        tags: ['Habitaciones'],
+        summary: 'Historial de limpieza y mantenimiento de una habitación',
+        description:
+          'Devuelve las tareas de housekeeping y los tickets de mantenimiento de la habitación ' +
+          'combinados en `history`, ordenados por fecha de actividad descendente. Cada entrada ' +
+          'incluye `origen` (`tarea` o `ticket`) además de sus campos propios (entre ellos `tipo`).',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        responses: {
+          200: { description: 'Historial de la habitación' },
+          401: { $ref: '#/components/responses/Error401' },
+          404: { $ref: '#/components/responses/Error404' },
         },
       },
     },
@@ -794,11 +831,14 @@ const spec = {
         tags: ['Reservas'],
         summary: 'Registra el check-in y pasa la reserva a EN_CURSO',
         description:
-          'Solo admite una reserva `CONFIRMADA`; en cualquier otro estado responde `409`.',
+          'Solo admite una reserva `CONFIRMADA`; en cualquier otro estado responde `409`. Si ' +
+          '`HOUSEKEEPING_BLOCK_CHECKIN` está activa y la habitación no está `LIMPIA`, responde ' +
+          '`409` con el código `HABITACION_NO_LIMPIA` y la reserva permanece en `CONFIRMADA`.',
         security: [{ bearerAuth: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
         responses: {
           200: { description: 'Reserva en curso' },
+          401: { $ref: '#/components/responses/Error401' },
           404: { $ref: '#/components/responses/Error404' },
           409: { $ref: '#/components/responses/Error409' },
         },
@@ -831,6 +871,174 @@ const spec = {
           200: { description: 'Reserva marcada como no-presentación' },
           404: { $ref: '#/components/responses/Error404' },
           409: { $ref: '#/components/responses/Error409' },
+        },
+      },
+    },
+    '/housekeeping/tasks': {
+      post: {
+        tags: ['Housekeeping'],
+        summary: 'Programa una tarea de limpieza o inspección (solo Administrador)',
+        description:
+          'La habitación debe existir (`404` en caso contrario). La tarea nace en `PENDIENTE` con ' +
+          'la fecha programada dada y, opcionalmente, un responsable.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/HousekeepingTaskCreate' } },
+          },
+        },
+        responses: {
+          201: { description: 'Tarea creada' },
+          403: { $ref: '#/components/responses/Error403' },
+          404: { $ref: '#/components/responses/Error404' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+      get: {
+        tags: ['Housekeeping'],
+        summary: 'Lista tareas de limpieza con filtros y paginación',
+        description:
+          'Filtros opcionales `estado`, `tipo`, `roomId`, `asignadoAId` y `fecha` (YYYY-MM-DD). ' +
+          'Responde `{ data, pagination }`.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'estado', in: 'query', schema: { type: 'string' } },
+          { name: 'tipo', in: 'query', schema: { type: 'string' } },
+          { name: 'roomId', in: 'query', schema: { type: 'integer' } },
+          { name: 'asignadoAId', in: 'query', schema: { type: 'integer' } },
+          { name: 'fecha', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'pageSize', in: 'query', schema: { type: 'integer', default: 10, maximum: 100 } },
+        ],
+        responses: {
+          200: { description: 'Tareas paginadas' },
+          401: { $ref: '#/components/responses/Error401' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+    },
+    '/housekeeping/tasks/{id}': {
+      patch: {
+        tags: ['Housekeeping'],
+        summary: 'Actualiza una tarea (reclamar, avanzar, asignar o cancelar)',
+        description:
+          'Las transiciones válidas son `PENDIENTE → EN_PROCESO → LIMPIA → EN_INSPECCION → ' +
+          'INSPECCION_OK | INSPECCION_FALLA`, más `CANCELADA` y `INSPECCION_FALLA → EN_PROCESO`. ' +
+          'Una transición inválida o mover un estado terminal responde `409`. Cualquier usuario ' +
+          'autenticado puede reclamar una tarea sin asignar (se asigna a sí mismo) y avanzarla; ' +
+          'asignar a otro usuario y cancelar requieren `ADMINISTRADOR` (`403` en caso contrario).',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/HousekeepingTaskUpdate' } },
+          },
+        },
+        responses: {
+          200: { description: 'Tarea actualizada' },
+          401: { $ref: '#/components/responses/Error401' },
+          403: { $ref: '#/components/responses/Error403' },
+          404: { $ref: '#/components/responses/Error404' },
+          409: { $ref: '#/components/responses/Error409' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+    },
+    '/housekeeping/resumen': {
+      get: {
+        tags: ['Housekeeping'],
+        summary: 'Resumen de tareas por estado y por responsable',
+        description:
+          'Devuelve `porEstado` (conteo por estado) y `porAsignado` (conteo por responsable). Si la ' +
+          'fecha no es válida responde `422`.',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'fecha', in: 'query', schema: { type: 'string', format: 'date' } }],
+        responses: {
+          200: { description: 'Resumen de carga de trabajo' },
+          401: { $ref: '#/components/responses/Error401' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+    },
+    '/maintenance/tickets': {
+      post: {
+        tags: ['Mantenimiento'],
+        summary: 'Reporta un ticket de mantenimiento',
+        description:
+          'Cualquier usuario autenticado puede reportar una incidencia. La habitación debe existir ' +
+          '(`404`); tipo o prioridad inválidos responden `422`. El ticket nace en `ABIERTO`.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/MaintenanceTicketCreate' } },
+          },
+        },
+        responses: {
+          201: { description: 'Ticket creado' },
+          401: { $ref: '#/components/responses/Error401' },
+          404: { $ref: '#/components/responses/Error404' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+      get: {
+        tags: ['Mantenimiento'],
+        summary: 'Lista tickets de mantenimiento con filtros y paginación',
+        description:
+          'Filtros opcionales `estado`, `prioridad`, `roomId` y `tipo`. Responde `{ data, pagination }`.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'estado', in: 'query', schema: { type: 'string' } },
+          { name: 'prioridad', in: 'query', schema: { type: 'string' } },
+          { name: 'roomId', in: 'query', schema: { type: 'integer' } },
+          { name: 'tipo', in: 'query', schema: { type: 'string' } },
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'pageSize', in: 'query', schema: { type: 'integer', default: 10, maximum: 100 } },
+        ],
+        responses: {
+          200: { description: 'Tickets paginados' },
+          401: { $ref: '#/components/responses/Error401' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+    },
+    '/maintenance/tickets/{id}': {
+      get: {
+        tags: ['Mantenimiento'],
+        summary: 'Obtiene un ticket de mantenimiento',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        responses: {
+          200: { description: 'Ticket encontrado' },
+          401: { $ref: '#/components/responses/Error401' },
+          404: { $ref: '#/components/responses/Error404' },
+        },
+      },
+      patch: {
+        tags: ['Mantenimiento'],
+        summary: 'Actualiza un ticket (avanzar, resolver o cancelar)',
+        description:
+          'Transiciones permitidas: `ABIERTO → EN_PROCESO → RESUELTO` y `ABIERTO|EN_PROCESO → ' +
+          'CANCELADO` (cancelar solo `ADMINISTRADOR`, `403` en caso contrario). Resolver exige una ' +
+          '`resolucion` no vacía (`422` si no viene). Al resolver se crea automáticamente una tarea ' +
+          'de `INSPECCION` para la habitación si no hay ya una `PENDIENTE` o `EN_INSPECCION`.',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/MaintenanceTicketUpdate' } },
+          },
+        },
+        responses: {
+          200: { description: 'Ticket actualizado' },
+          401: { $ref: '#/components/responses/Error401' },
+          403: { $ref: '#/components/responses/Error403' },
+          404: { $ref: '#/components/responses/Error404' },
+          409: { $ref: '#/components/responses/Error409' },
+          422: { $ref: '#/components/responses/Error422' },
         },
       },
     },
@@ -1523,6 +1731,95 @@ const spec = {
           dia: { type: 'string', description: 'Nombre del día de la semana' },
           tarifa: { type: 'integer' },
           origen: { type: 'string', enum: ['WEEKDAY', 'SEASON', 'BASE'] },
+        },
+      },
+      EstadoHousekeeping: {
+        type: 'string',
+        enum: ['PENDIENTE', 'EN_PROCESO', 'LIMPIA', 'EN_INSPECCION', 'INSPECCION_OK', 'INSPECCION_FALLA', 'CANCELADA'],
+      },
+      TipoHousekeeping: {
+        type: 'string',
+        enum: ['LIMPIEZA', 'LIMPIEZA_PROFUNDA', 'LINNERIA', 'INSPECCION'],
+      },
+      HousekeepingTask: {
+        type: 'object',
+        properties: {
+          id: { type: 'integer' },
+          roomId: { type: 'integer' },
+          tipo: { $ref: '#/components/schemas/TipoHousekeeping' },
+          estado: { $ref: '#/components/schemas/EstadoHousekeeping' },
+          asignadoAId: { type: 'integer', nullable: true },
+          fechaProgramada: { type: 'string', format: 'date-time' },
+          observaciones: { type: 'string', nullable: true },
+          creadoEn: { type: 'string', format: 'date-time' },
+          actualizadoEn: { type: 'string', format: 'date-time' },
+        },
+      },
+      HousekeepingTaskCreate: {
+        type: 'object',
+        required: ['roomId', 'tipo', 'fechaProgramada'],
+        properties: {
+          roomId: { type: 'integer' },
+          tipo: { $ref: '#/components/schemas/TipoHousekeeping' },
+          fechaProgramada: { type: 'string', format: 'date-time' },
+          asignadoAId: { type: 'integer' },
+          observaciones: { type: 'string' },
+        },
+      },
+      HousekeepingTaskUpdate: {
+        type: 'object',
+        properties: {
+          estado: { $ref: '#/components/schemas/EstadoHousekeeping' },
+          asignadoAId: { type: 'integer', nullable: true },
+          observaciones: { type: 'string' },
+          fechaProgramada: { type: 'string', format: 'date-time' },
+        },
+      },
+      EstadoTicket: {
+        type: 'string',
+        enum: ['ABIERTO', 'EN_PROCESO', 'RESUELTO', 'CANCELADO'],
+      },
+      PrioridadTicket: {
+        type: 'string',
+        enum: ['BAJA', 'MEDIA', 'ALTA', 'URGENTE'],
+      },
+      TipoTicket: {
+        type: 'string',
+        enum: ['FUGA', 'AVERIA', 'ELECTRICA', 'LIMPIEZA_REACTIVA', 'OTRO'],
+      },
+      MaintenanceTicket: {
+        type: 'object',
+        properties: {
+          id: { type: 'integer' },
+          roomId: { type: 'integer' },
+          tipo: { $ref: '#/components/schemas/TipoTicket' },
+          prioridad: { $ref: '#/components/schemas/PrioridadTicket' },
+          estado: { $ref: '#/components/schemas/EstadoTicket' },
+          descripcion: { type: 'string' },
+          resolucion: { type: 'string', nullable: true },
+          reportadoPorId: { type: 'integer' },
+          asignadoAId: { type: 'integer', nullable: true },
+          creadoEn: { type: 'string', format: 'date-time' },
+          actualizadoEn: { type: 'string', format: 'date-time' },
+          resueltoEn: { type: 'string', format: 'date-time', nullable: true },
+        },
+      },
+      MaintenanceTicketCreate: {
+        type: 'object',
+        required: ['roomId', 'tipo', 'prioridad', 'descripcion'],
+        properties: {
+          roomId: { type: 'integer' },
+          tipo: { $ref: '#/components/schemas/TipoTicket' },
+          prioridad: { $ref: '#/components/schemas/PrioridadTicket' },
+          descripcion: { type: 'string', minLength: 1 },
+        },
+      },
+      MaintenanceTicketUpdate: {
+        type: 'object',
+        properties: {
+          estado: { $ref: '#/components/schemas/EstadoTicket' },
+          asignadoAId: { type: 'integer', nullable: true },
+          resolucion: { type: 'string' },
         },
       },
       EstadoPago: {

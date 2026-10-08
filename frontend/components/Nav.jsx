@@ -11,6 +11,8 @@ const LINKS = [
   { href: '/habitaciones', label: 'Habitaciones' },
   { href: '/tarifas', label: 'Tarifas' },
   { href: '/disponibilidad', label: 'Disponibilidad' },
+  { href: '/limpieza', label: 'Limpieza' },
+  { href: '/mantenimiento', label: 'Mantenimiento' },
   { href: '/reportes', label: 'Reportes' },
   { href: '/usuarios', label: 'Usuarios', admin: true },
   { href: '/auditoria', label: 'Auditoría', admin: true },

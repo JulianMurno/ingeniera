@@ -77,6 +77,15 @@ Toda ruta protegida requiere `Authorization: Bearer <token>` (obtenido en `POST 
 | POST   | `/api/v1/reservations/{id}/checkin` | Registra el check-in (`EN_CURSO`)               | autenticado   |
 | POST   | `/api/v1/reservations/{id}/checkout` | Registra el check-out (`FINALIZADA`)            | autenticado   |
 | POST   | `/api/v1/reservations/{id}/no-show` | Marca `NO_SHOW` y libera el rango               | autenticado   |
+| POST   | `/api/v1/housekeeping/tasks`       | Programa tarea de limpieza/inspección            | ADMINISTRADOR |
+| GET    | `/api/v1/housekeeping/tasks`       | Lista tareas con filtros y paginación            | autenticado   |
+| PATCH  | `/api/v1/housekeeping/tasks/{id}`   | Actualiza tarea (avanza, asigna, cancela)        | autenticado   |
+| GET    | `/api/v1/housekeeping/resumen`      | Resumen de tareas por estado y responsable       | autenticado   |
+| GET    | `/api/v1/rooms/{id}/housekeeping`   | Historial de limpieza y mantenimiento de habitación | autenticado   |
+| POST   | `/api/v1/maintenance/tickets`       | Reporta ticket de mantenimiento                  | autenticado   |
+| GET    | `/api/v1/maintenance/tickets`       | Lista tickets con filtros y paginación           | autenticado   |
+| GET    | `/api/v1/maintenance/tickets/{id}`  | Detalle de ticket                                | autenticado   |
+| PATCH  | `/api/v1/maintenance/tickets/{id}`  | Actualiza ticket (resuelve/cancela)              | autenticado   |
 | POST   | `/api/v1/reservations/{id}/payments` | Registra un pago contra la reserva             | autenticado   |
 | GET    | `/api/v1/reservations/{id}/invoices` | Genera la factura de la reserva                | autenticado   |
 | GET    | `/api/v1/reports/ocupacion`          | Ocupación del hotel para un rango              | autenticado   |
@@ -277,6 +286,14 @@ Todos los filtros son opcionales y combinables; la respuesta es `{ data, paginat
 
 `checkIn` y `checkOut` van juntos y `checkIn` debe ser anterior a `checkOut`; si no, `422`.
 
+## Housekeeping y Mantenimiento
+
+El flujo operativo es: **programar → limpiar → inspeccionar**.
+
+- `POST /housekeeping/tasks` crea una tarea de limpieza (`PENDIENTE`), los `PATCH` avanzan por `EN_PROCESO → LIMPIA → EN_INSPECCION → INSPECCION_OK | INSPECCION_FALLA` (o `CANCELADA`). `GET /housekeeping/tasks` filtra por `estado`, `tipo`, `roomId`, `asignadoAId` y `fecha`, y `GET /housekeeping/resumen` agrupa por estado y por asignatario. El detalle de una habitación (`GET /rooms/{id}`) incluye `limpieza` (derivada de la última tarea no cancelada) e `incidenciasAbiertas`, y `GET /rooms/{id}/housekeeping` devuelve el historial combinado de tareas y tickets.
+- `POST /maintenance/tickets` registra una incidencia; `PATCH /maintenance/tickets/{id}` la mueve por `ABIERTO → EN_PROCESO → RESUELTO` (o `CANCELADO`, solo administrador). Al resolver un ticket se crea automáticamente una tarea de `INSPECCION` para esa habitación (sin duplicar si ya hay una `PENDIENTE`/`EN_INSPECCION`).
+- `HOUSEKEEPING_BLOCK_CHECKIN` (default `false`): si está activa, el check-in de una reserva responde `409 HABITACION_NO_LIMPIA` cuando la habitación no está `LIMPIA`.
+
 ## Reglas de disponibilidad y tarifas
 
 ### Configuración por entorno
@@ -286,6 +303,7 @@ Todos los filtros son opcionales y combinables; la respuesta es `{ data, paginat
 | `MIN_STAY_NIGHTS`   | `1`         | Noches mínimas de una estancia (`422` si el rango no alcanza)  |
 | `MAX_STAY_NIGHTS`   | `30`        | Noches máximas de una estancia (`422` si el rango las supera)  |
 | `MIN_ADVANCE_NIGHTS`| `0`         | Noches mínimas de antelación desde hoy (`422` si no se cumple) |
+| `HOUSEKEEPING_BLOCK_CHECKIN`| `false` | Si `true`, bloquea check-in cuando habitación no está `LIMPIA` (`409 HABITACION_NO_LIMPIA`) |
 | `CHECK_IN_HOUR`     | `15:00`     | Hora de ingreso; un ingreso antes ocupa el día completo       |
 | `CHECK_OUT_HOUR`    | `11:00`     | Hora de egreso; una salida después ocupa el día completo       |
 | `CANCELLATION_FEE_PERCENT` | `0` | Porcentaje del total que se cobra como multa al cancelar       |

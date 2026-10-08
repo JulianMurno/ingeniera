@@ -14,6 +14,8 @@ async function resetDb() {
   await prisma.payment.deleteMany();
   await prisma.auditLog.deleteMany();
   await prisma.reservation.deleteMany();
+  await prisma.housekeepingTask.deleteMany();
+  await prisma.maintenanceTicket.deleteMany();
   await prisma.season.deleteMany();
   await prisma.weekdayRate.deleteMany();
   await prisma.room.deleteMany();
@@ -93,6 +95,8 @@ function withEnv(values, run) {
   restore();
   return result;
 }
+
+afterAll(() => prisma.$disconnect());
 
 module.exports = {
   app,
