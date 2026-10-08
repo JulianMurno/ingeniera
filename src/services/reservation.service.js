@@ -17,6 +17,8 @@ const {
 } = require('../lib/reservationState');
 const { estadoMantenimiento } = require('../schemas/room.schema');
 const { HttpError } = require('../lib/httpError');
+const { audit, ACCIONES, RECURSOS } = require('../lib/audit');
+const paymentService = require('./payment.service');
 
 const CODE_ATTEMPTS = 5;
 
@@ -162,7 +164,7 @@ function normalizeOcupantes({ adultos, menores }, existing = {}) {
   };
 }
 
-async function createReservation(data) {
+async function createReservation(data, actor = null) {
   const room = await ensureResourceExists(data.guestId, data.roomId);
   const stay = buildStay(data);
   const nights = calculateNights(stay.checkIn, stay.checkOut);
@@ -203,6 +205,22 @@ async function createReservation(data) {
     );
   });
 
+  await audit({
+    actor,
+    accion: ACCIONES.CREAR,
+    recurso: RECURSOS.RESERVA,
+    recursoId: reservation.id,
+    detalle: {
+      codigo: reservation.codigo,
+      estado: reservation.estado,
+      total: reservation.total,
+      checkIn: isoDay(reservation.checkIn),
+      checkOut: isoDay(reservation.checkOut),
+      roomId: reservation.roomId,
+      guestId: reservation.guestId,
+    },
+  });
+
   await notificarConfirmacion(reservation);
   return reservation;
 }
@@ -216,10 +234,10 @@ async function getReservation(id) {
   if (!reservation) {
     throw new HttpError(404, 'NOT_FOUND', 'Reserva no encontrada');
   }
-  return reservation;
+  return paymentService.loadPaymentState(reservation);
 }
 
-async function updateReservation(id, data) {
+async function updateReservation(id, data, actor = null) {
   const existing = await getReservation(id);
 
   const roomId = data.roomId ?? existing.roomId;
@@ -239,7 +257,7 @@ async function updateReservation(id, data) {
   assertOcupantesDentroDeCapacidad(ocupantes, room);
   assertRangoTemporalValido(stay.checkIn);
 
-  return prisma.$transaction(async (tx) => {
+  const reservation = await prisma.$transaction(async (tx) => {
     await assertSinSobreocupacion({ room, stay, ocupantes, excludeId: id, tx });
     const { total } = await rateService.getDetalleTarifas({
       roomType: room.tipo,
@@ -265,6 +283,22 @@ async function updateReservation(id, data) {
       tx,
     );
   });
+
+  await audit({
+    actor,
+    accion: ACCIONES.MODIFICAR,
+    recurso: RECURSOS.RESERVA,
+    recursoId: id,
+    detalle: {
+      campos: Object.keys(data),
+      total: reservation.total,
+      noches: reservation.noches,
+      checkIn: isoDay(reservation.checkIn),
+      checkOut: isoDay(reservation.checkOut),
+    },
+  });
+
+  return reservation;
 }
 
 async function cambiarEstado(id, estado) {
@@ -285,7 +319,7 @@ async function markNoShow(id) {
   return cambiarEstado(id, NO_SHOW);
 }
 
-async function cancelReservation(id, data = {}) {
+async function cancelReservation(id, data = {}, actor = null) {
   const existing = await getReservation(id);
   assertTransition(existing.estado, CANCELADA);
 
@@ -294,6 +328,19 @@ async function cancelReservation(id, data = {}) {
     estado: CANCELADA,
     motivoCancelacion: motivo ?? null,
     multaCancelacion: calculateCancellationFee(existing.total),
+  });
+
+  await audit({
+    actor,
+    accion: ACCIONES.CANCELAR,
+    recurso: RECURSOS.RESERVA,
+    recursoId: id,
+    detalle: {
+      motivo: motivo ?? null,
+      multa: reservation.multaCancelacion,
+      total: reservation.total,
+      totalPagado: existing.totalPagado,
+    },
   });
 
   await notificarCancelacion(reservation);

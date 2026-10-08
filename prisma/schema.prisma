@@ -8,12 +8,13 @@ datasource db {
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  username  String   @unique
+  id        Int         @id @default(autoincrement())
+  username  String      @unique
   password  String
   rol       String
-  activo    Boolean  @default(true)
-  createdAt DateTime @default(now())
+  activo    Boolean     @default(true)
+  createdAt DateTime    @default(now())
+  auditLogs AuditLog[]
 }
 
 model TokenInvalidado {
@@ -69,6 +70,7 @@ model Reservation {
   createdAt         DateTime @default(now())
   guest             Guest    @relation(fields: [guestId], references: [id])
   room              Room     @relation(fields: [roomId], references: [id])
+  payments          Payment[]
 
   @@index([roomId, checkIn, checkOut])
   @@index([guestId])
@@ -95,4 +97,31 @@ model WeekdayRate {
   createdAt DateTime @default(now())
 
   @@unique([roomType, diaSemana])
+}
+
+model Payment {
+  id            Int         @id @default(autoincrement())
+  reservationId Int
+  monto         Int
+  metodo        String
+  pagadoEn      DateTime
+  createdAt     DateTime    @default(now())
+  reservation   Reservation @relation(fields: [reservationId], references: [id])
+
+  @@index([pagadoEn])
+  @@index([reservationId])
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  accion    String
+  recurso   String
+  recursoId String?
+  detalle   String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([createdAt])
+  @@index([userId, accion])
 }

@@ -8,6 +8,8 @@ const {
   reservationQuerySchema,
 } = require('../schemas/reservation.schema');
 const { idParamSchema } = require('../schemas/room.schema');
+const { paymentCreateSchema } = require('../schemas/payment.schema');
+const { getInvoice, registerPayment } = require('../controllers/payment.controller');
 const {
   createReservation,
   listReservations,
@@ -41,5 +43,12 @@ router.post(
 router.post('/:id/checkin', validate(idParamSchema, 'params'), checkInReservation);
 router.post('/:id/checkout', validate(idParamSchema, 'params'), checkOutReservation);
 router.post('/:id/no-show', validate(idParamSchema, 'params'), markNoShow);
+router.post(
+  '/:id/payments',
+  validate(idParamSchema, 'params'),
+  validate(paymentCreateSchema),
+  registerPayment,
+);
+router.get('/:id/invoices', validate(idParamSchema, 'params'), getInvoice);
 
 module.exports = router;

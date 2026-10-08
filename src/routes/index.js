@@ -7,6 +7,9 @@ const roomRoutes = require('./room.routes');
 const rateRoutes = require('./rate.routes');
 const availabilityRoutes = require('./availability.routes');
 const reservationRoutes = require('./reservation.routes');
+const reportRoutes = require('./report.routes');
+const auditRoutes = require('./audit.routes');
+const healthRoutes = require('./health.routes');
 
 const router = Router();
 
@@ -17,5 +20,8 @@ router.use('/rooms', roomRoutes);
 router.use('/rates', rateRoutes);
 router.use('/availability', availabilityRoutes);
 router.use('/reservations', reservationRoutes);
+router.use('/reports', reportRoutes);
+router.use('/audit', auditRoutes);
+router.use('/health', healthRoutes);
 
 module.exports = router;
