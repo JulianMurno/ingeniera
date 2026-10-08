@@ -1,0 +1,316 @@
+:root {
+  --bg: #f4f6f8;
+  --card: #ffffff;
+  --ink: #1f2933;
+  --muted: #6b7280;
+  --line: #e5e7eb;
+  --accent: #2563eb;
+  --accent-ink: #ffffff;
+  --danger: #b91c1c;
+  --ok: #15803d;
+  --warn: #b45309;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.view {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.login-card {
+  max-width: 360px;
+  margin: 12vh auto 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.login-card h1 {
+  margin: 0;
+}
+
+label {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+input,
+select,
+button {
+  font: inherit;
+}
+
+input,
+select {
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+}
+
+button {
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  cursor: pointer;
+}
+
+button:hover {
+  filter: brightness(1.08);
+}
+
+button.ghost {
+  background: transparent;
+  color: var(--accent);
+}
+
+button.mini {
+  padding: 0.25rem 0.55rem;
+  font-size: 0.8rem;
+}
+
+button.danger {
+  background: transparent;
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0.6rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.brand {
+  font-size: 1.05rem;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.4rem;
+  flex: 1;
+}
+
+.tab {
+  background: transparent;
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+.tab.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.session {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.toolbar h2 {
+  margin: 0.25rem 0;
+}
+
+.filters {
+  display: flex;
+  align-items: end;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin: 0.75rem 0;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 0.55rem 0.7rem;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+th {
+  background: #f9fafb;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+tr:last-child td {
+  border-bottom: none;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.12rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: #e5e7eb;
+  color: var(--ink);
+}
+
+.badge.ok,
+.badge.LIMPIA,
+.badge.INSPECCION_OK,
+.badge.RESUELTO {
+  background: #dcfce7;
+  color: var(--ok);
+}
+
+.badge.warn,
+.badge.PENDIENTE,
+.badge.EN_PROCESO,
+.badge.EN_INSPECCION,
+.badge.ABIERTO,
+.badge.INSPECCION_FALLA,
+.badge.SUCIA {
+  background: #fef3c7;
+  color: var(--warn);
+}
+
+.badge.danger,
+.badge.CANCELADA,
+.badge.CANCELADO,
+.badge.MANTENIMIENTO {
+  background: #fee2e2;
+  color: var(--danger);
+}
+
+.chips {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin: 0.5rem 0;
+}
+
+.chip {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.82rem;
+}
+
+.form-grid {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  max-width: 520px;
+}
+
+.form-grid h3 {
+  margin: 0;
+}
+
+.actions {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.error {
+  color: var(--danger);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+#room-detail {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.75rem;
+}
+
+#room-detail h3 {
+  margin: 0;
+}
+
+.history {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.history th,
+.history td {
+  padding: 0.4rem 0.5rem;
+}
+
+#toast {
+  position: fixed;
+  left: 50%;
+  bottom: 1.5rem;
+  transform: translateX(-50%);
+  background: var(--ink);
+  color: #fff;
+  padding: 0.6rem 1rem;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  max-width: 90vw;
+  z-index: 10;
+}
+
+#toast.error {
+  background: var(--danger);
+}
+
+.empty {
+  padding: 1rem;
+  color: var(--muted);
+  font-size: 0.88rem;
+}

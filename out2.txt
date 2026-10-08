@@ -1,0 +1,8 @@
+Environment variables loaded from .env
+Prisma schema loaded from prisma\schema.prisma
+Datasource "db": SQLite database "test.db" at "file:./test.db"
+
+8 migrations found in prisma/migrations
+
+
+No pending migrations to apply.

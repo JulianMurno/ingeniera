@@ -38,4 +38,22 @@ async function deleteRoom(req, res, next) {
   }
 }
 
-module.exports = { createRoom, listRooms, updateRoom, deleteRoom };
+async function getRoom(req, res, next) {
+  try {
+    const room = await roomService.getRoom(req.params.id);
+    return res.json(room);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+async function getRoomHousekeeping(req, res, next) {
+  try {
+    const data = await roomService.getRoomHousekeeping(req.params.id);
+    return res.json(data);
+  } catch (err) {
+    return next(err);
+  }
+}
+
+module.exports = { createRoom, listRooms, updateRoom, deleteRoom, getRoom, getRoomHousekeeping };

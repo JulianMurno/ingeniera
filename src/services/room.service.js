@@ -1,6 +1,9 @@
 const roomRepo = require('../repositories/room.repository');
+const housekeepingRepo = require('../repositories/housekeeping.repository');
+const maintenanceRepo = require('../repositories/maintenance.repository');
 const { toDate } = require('./business.service');
 const { HttpError } = require('../lib/httpError');
+const housekeepingService = require('./housekeeping.service');
 
 async function createRoom(data) {
   const existing = await roomRepo.findByNumero(data.numero);
@@ -27,7 +30,9 @@ async function getRoom(id) {
   if (!room) {
     throw new HttpError(404, 'NOT_FOUND', 'Habitación no encontrada');
   }
-  return room;
+  const limpieza = await housekeepingService.getEstadoLimpieza(id);
+  const incidenciasAbiertas = await maintenanceRepo.countOpenByRoomId(id);
+  return { ...room, limpieza, incidenciasAbiertas };
 }
 
 async function updateRoom(id, data) {
@@ -61,4 +66,25 @@ async function deleteRoom(id) {
   }
 }
 
-module.exports = { createRoom, listRooms, getRoom, updateRoom, deleteRoom };
+async function getRoomHousekeeping(id) {
+  const room = await roomRepo.findById(id);
+  if (!room) {
+    throw new HttpError(404, 'NOT_FOUND', 'Habitación no encontrada');
+  }
+  const [tasks, tickets] = await Promise.all([
+    housekeepingRepo.findByRoomId(id),
+    maintenanceRepo.findByRoomId(id),
+  ]);
+  const history = [
+    ...tasks.map((t) => ({ origen: 'tarea', ...t })),
+    ...tickets.map((t) => ({ origen: 'ticket', ...t })),
+  ];
+  history.sort((a, b) => {
+    const da = new Date(a.actualizadoEn || a.creadoEn || 0).getTime();
+    const db = new Date(b.actualizadoEn || b.creadoEn || 0).getTime();
+    return db - da;
+  });
+  return { room, history };
+}
+
+module.exports = { createRoom, listRooms, getRoom, updateRoom, deleteRoom, getRoomHousekeeping };

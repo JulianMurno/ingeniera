@@ -8,12 +8,15 @@ datasource db {
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  username  String   @unique
-  password  String
-  rol       String
-  activo    Boolean  @default(true)
-  createdAt DateTime @default(now())
+  id                       Int                 @id @default(autoincrement())
+  username                 String              @unique
+  password                 String
+  rol                      String
+  activo                   Boolean             @default(true)
+  createdAt                DateTime            @default(now())
+  housekeepingTasksAsignado HousekeepingTask[] @relation("HousekeepingTaskAsignadoA")
+  maintenanceReportado      MaintenanceTicket[] @relation("MaintenanceTicketReportadoPor")
+  maintenanceAsignado       MaintenanceTicket[] @relation("MaintenanceTicketAsignadoA")
 }
 
 model TokenInvalidado {
@@ -36,17 +39,19 @@ model Guest {
 }
 
 model Room {
-  id           Int           @id @default(autoincrement())
-  numero       String        @unique
-  tipo         String
-  tarifa       Int
-  estado       String        @default("DISPONIBLE")
-  capacidad    Int           @default(1)
-  descripcion  String?
-  comodidades  String?
-  fotos        String?
-  createdAt    DateTime      @default(now())
-  reservations Reservation[]
+  id                Int                 @id @default(autoincrement())
+  numero            String              @unique
+  tipo              String
+  tarifa            Int
+  estado            String              @default("DISPONIBLE")
+  capacidad         Int                 @default(1)
+  descripcion       String?
+  comodidades       String?
+  fotos             String?
+  createdAt         DateTime            @default(now())
+  reservations      Reservation[]
+  housekeepingTasks  HousekeepingTask[]
+  maintenanceTickets MaintenanceTicket[]
 }
 
 model Reservation {
@@ -95,4 +100,43 @@ model WeekdayRate {
   createdAt DateTime @default(now())
 
   @@unique([roomType, diaSemana])
+}
+
+model HousekeepingTask {
+  id              Int      @id @default(autoincrement())
+  roomId          Int
+  tipo            String
+  estado          String
+  asignadoAId     Int?
+  fechaProgramada DateTime
+  observaciones   String?
+  creadoEn        DateTime @default(now())
+  actualizadoEn   DateTime @updatedAt
+  room            Room     @relation(fields: [roomId], references: [id])
+  asignadoA       User?    @relation("HousekeepingTaskAsignadoA", fields: [asignadoAId], references: [id])
+
+  @@index([roomId, estado])
+  @@index([estado, fechaProgramada])
+  @@index([asignadoAId, estado])
+}
+
+model MaintenanceTicket {
+  id             Int       @id @default(autoincrement())
+  roomId         Int
+  tipo           String
+  prioridad      String
+  estado         String
+  descripcion    String
+  resolucion     String?
+  reportadoPorId Int
+  asignadoAId    Int?
+  creadoEn       DateTime  @default(now())
+  actualizadoEn  DateTime  @updatedAt
+  resueltoEn     DateTime?
+  room           Room      @relation(fields: [roomId], references: [id])
+  reportadoPor   User      @relation("MaintenanceTicketReportadoPor", fields: [reportadoPorId], references: [id])
+  asignadoA      User?     @relation("MaintenanceTicketAsignadoA", fields: [asignadoAId], references: [id])
+
+  @@index([roomId, estado])
+  @@index([estado, prioridad])
 }

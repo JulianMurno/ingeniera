@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HOTELing — Operaciones</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <section id="login-view" class="view">
+      <form id="login-form" class="card login-card">
+        <h1>HOTELing</h1>
+        <p class="muted">Housekeeping y mantenimiento</p>
+        <label>
+          Usuario
+          <input id="login-username" autocomplete="username" required />
+        </label>
+        <label>
+          Contraseña
+          <input id="login-password" type="password" autocomplete="current-password" required />
+        </label>
+        <button type="submit">Ingresar</button>
+        <p id="login-error" class="error" hidden></p>
+      </form>
+    </section>
+
+    <section id="main-view" class="view" hidden>
+      <header class="topbar">
+        <strong class="brand">HOTELing</strong>
+        <nav class="tabs">
+          <button class="tab active" data-tab="habitaciones">Habitaciones</button>
+          <button class="tab" data-tab="housekeeping">Housekeeping</button>
+          <button class="tab" data-tab="mantenimiento">Mantenimiento</button>
+        </nav>
+        <div class="session">
+          <span id="session-user" class="muted"></span>
+          <button id="logout-btn" class="ghost">Salir</button>
+        </div>
+      </header>
+
+      <main>
+        <section id="panel-habitaciones" class="panel">
+          <div class="toolbar">
+            <h2>Habitaciones</h2>
+            <button id="rooms-refresh">Actualizar</button>
+          </div>
+          <div class="table-wrap">
+            <table id="rooms-table">
+              <thead>
+                <tr>
+                  <th>Número</th>
+                  <th>Tipo</th>
+                  <th>Capacidad</th>
+                  <th>Estado</th>
+                  <th>Tarifa</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <div id="room-detail" class="card" hidden></div>
+        </section>
+
+        <section id="panel-housekeeping" class="panel" hidden>
+          <div class="toolbar">
+            <h2>Housekeeping</h2>
+            <button id="hk-refresh">Actualizar</button>
+          </div>
+          <div id="hk-resumen" class="chips"></div>
+          <form id="hk-filters" class="filters">
+            <label>
+              Estado
+              <select id="hk-filter-estado">
+                <option value="">Todos</option>
+              </select>
+            </label>
+            <label>
+              Tipo
+              <select id="hk-filter-tipo">
+                <option value="">Todos</option>
+              </select>
+            </label>
+            <label>
+              Habitación
+              <input id="hk-filter-roomId" type="number" min="1" placeholder="id" />
+            </label>
+            <button type="submit">Filtrar</button>
+          </form>
+          <div class="table-wrap">
+            <table id="hk-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Habitación</th>
+                  <th>Tipo</th>
+                  <th>Estado</th>
+                  <th>Programada</th>
+                  <th>Asignada a</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <form id="hk-create" class="card form-grid" hidden>
+            <h3>Programar tarea</h3>
+            <label>
+              Habitación (id)
+              <input id="hk-create-roomId" type="number" min="1" required />
+            </label>
+            <label>
+              Tipo
+              <select id="hk-create-tipo"></select>
+            </label>
+            <label>
+              Fecha programada
+              <input id="hk-create-fecha" type="datetime-local" required />
+            </label>
+            <label>
+              Observaciones
+              <input id="hk-create-observaciones" />
+            </label>
+            <button type="submit">Crear tarea</button>
+          </form>
+        </section>
+
+        <section id="panel-mantenimiento" class="panel" hidden>
+          <div class="toolbar">
+            <h2>Mantenimiento</h2>
+            <button id="mt-refresh">Actualizar</button>
+          </div>
+          <form id="mt-filters" class="filters">
+            <label>
+              Estado
+              <select id="mt-filter-estado">
+                <option value="">Todos</option>
+              </select>
+            </label>
+            <label>
+              Prioridad
+              <select id="mt-filter-prioridad">
+                <option value="">Todas</option>
+              </select>
+            </label>
+            <label>
+              Habitación
+              <input id="mt-filter-roomId" type="number" min="1" placeholder="id" />
+            </label>
+            <button type="submit">Filtrar</button>
+          </form>
+          <div class="table-wrap">
+            <table id="mt-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Habitación</th>
+                  <th>Tipo</th>
+                  <th>Prioridad</th>
+                  <th>Estado</th>
+                  <th>Descripción</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+          <form id="mt-create" class="card form-grid">
+            <h3>Reportar incidencia</h3>
+            <label>
+              Habitación (id)
+              <input id="mt-create-roomId" type="number" min="1" required />
+            </label>
+            <label>
+              Tipo
+              <select id="mt-create-tipo"></select>
+            </label>
+            <label>
+              Prioridad
+              <select id="mt-create-prioridad"></select>
+            </label>
+            <label>
+              Descripción
+              <input id="mt-create-descripcion" required />
+            </label>
+            <button type="submit">Reportar</button>
+          </form>
+        </section>
+      </main>
+    </section>
+
+    <div id="toast" hidden></div>
+    <script src="/app.js"></script>
+  </body>
+</html>

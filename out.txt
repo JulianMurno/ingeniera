@@ -1,0 +1,14 @@
+Environment variables loaded from .env
+Prisma schema loaded from prisma\schema.prisma
+Datasource "db": SQLite database "test.db" at "file:./test.db"
+
+8 migrations found in prisma/migrations
+
+
+No pending migrations to apply.
+PASS tests/unit/business.test.js
+PASS tests/unit/rates.test.js
+PASS tests/unit/reservationState.test.js
+PASS tests/unit/availabilityRules.test.js
+PASS tests/unit/notifications.test.js
+PASS tests/integration/users.test.js (33.606 s)
