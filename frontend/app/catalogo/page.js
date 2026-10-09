@@ -1,159 +1,156 @@
 'use client';
 
 import { useState } from 'react';
-import { getToken, api, isAdmin } from '@/lib/api';
-import { useData } from '@/hooks/useData';
-import { CATEGORIA_LABEL, UNIDAD_LABEL, fmtMoney } from '@/lib/format';
-import { Badge, Btn, Card, ErrorMsg, Field, Loading, Table } from '@/components/ui';
+import { api, isAdmin } from '@/lib/api';
+import {
+  Badge,
+  Btn,
+  CATEGORIA_LABEL,
+  Card,
+  ErrorMsg,
+  Field,
+  Loading,
+  Pager,
+  Select,
+  Table,
+  UNIDAD_LABEL,
+  fmtMoney,
+} from '@/components/ui';
+import { useData } from '@/lib/useData';
 import FormExtra from '@/components/FormExtra';
-
-const PAGE_SIZE = 20;
 
 export default function CatalogoPage() {
   const admin = isAdmin();
   const [page, setPage] = useState(1);
-  const [filtro, setFiltro] = useState('');
-  const [showForm, setShowForm] = useState(false);
+  const [filtros, setFiltros] = useState({ categoria: '', activo: '' });
+  const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [error, setError] = useState(null);
+  const [actionErr, setActionErr] = useState(null);
 
-  const qs = new URLSearchParams();
-  qs.set('page', String(page));
-  qs.set('pageSize', String(PAGE_SIZE));
-  if (admin && filtro) qs.set('activo', filtro);
+  const params = new URLSearchParams({ page, pageSize: 20 });
+  if (filtros.categoria) params.set('categoria', filtros.categoria);
+  // El personal solo ve servicios activos: el filtro de estado es para el administrador
+  if (admin && filtros.activo) params.set('activo', filtros.activo);
+  const { data, pagination, loading, error, reload } = useData(
+    `/api/v1/extras?${params.toString()}`,
+  );
 
-  const { data, pagination, loading, error: fetchError, reload } = useData(`/extras?${qs}`);
-  const err = error || fetchError;
+  const setFiltro = (k) => (e) => {
+    setFiltros((f) => ({ ...f, [k]: e.target.value }));
+    setPage(1);
+  };
 
-  const totalPages = pagination ? Math.max(1, Math.ceil(pagination.total / PAGE_SIZE)) : 1;
-
-  if (!getToken()) {
-    return (
-      <Card title="Inicia sesión">
-        <p className="muted">
-          Para gestionar el catálogo de servicios usá una sesión del encabezado. El alta, edición y
-          baja son exclusivas de <code>ADMINISTRADOR</code>.
-        </p>
-      </Card>
-    );
-  }
-
-  async function onDeactivate(extra) {
-    if (!window.confirm(`¿Dar de baja "${extra.nombre}"? Los cargos ya registrados se conservan.`)) {
+  async function darDeBaja(extra) {
+    if (!window.confirm(`Dar de baja "${extra.nombre}"? Los cargos ya registrados se conservan.`)) {
       return;
     }
+    setActionErr(null);
     try {
-      await api(`/extras/${extra.id}`, { method: 'DELETE' });
+      await api(`/api/v1/extras/${extra.id}`, { method: 'DELETE' });
       reload();
     } catch (e) {
-      setError(e);
+      setActionErr(e);
     }
   }
 
   return (
     <>
       <div className="spread">
-        <h1>Catálogo de servicios adicionales</h1>
+        <h1>Servicios adicionales</h1>
         {admin && (
-          <Btn variant="primary" onClick={() => { setEditing(null); setShowForm((s) => !s); }}>
-            {showForm && !editing ? 'Ocultar formulario' : 'Nuevo servicio'}
+          <Btn variant="primary" onClick={() => { setCreating(true); setEditing(null); }}>
+            + Nuevo servicio
           </Btn>
         )}
       </div>
 
-      <ErrorMsg error={err} />
-
-      {admin && showForm && !editing && (
-        <Card>
-          <FormExtra onDone={reload} onCancel={() => setShowForm(false)} />
+      {admin && creating && (
+        <Card title="Nuevo servicio">
+          <FormExtra
+            onDone={() => { setCreating(false); reload(); }}
+            onCancel={() => setCreating(false)}
+          />
         </Card>
       )}
-
       {admin && editing && (
-        <Card>
+        <Card title={`Editar ${editing.codigo}`}>
           <FormExtra
             initial={editing}
-            onDone={() => { setEditing(null); setShowForm(false); reload(); }}
+            onDone={() => { setEditing(null); reload(); }}
             onCancel={() => setEditing(null)}
           />
         </Card>
       )}
 
-      <Card>
-        {admin && (
-          <div className="row" style={{ marginBottom: 12 }}>
+      <Card title="Filtros">
+        <div className="row">
+          <Field label="Categoría">
+            <Select value={filtros.categoria} onChange={setFiltro('categoria')}>
+              <option value="">Todas</option>
+              {Object.entries(CATEGORIA_LABEL).map(([k, v]) => (
+                <option key={k} value={k}>
+                  {v}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          {admin && (
             <Field label="Estado">
-              <select
-                className="select"
-                value={filtro}
-                onChange={(e) => { setFiltro(e.target.value); setPage(1); }}
-              >
+              <Select value={filtros.activo} onChange={setFiltro('activo')}>
                 <option value="">Todos</option>
                 <option value="true">Activos</option>
                 <option value="false">Inactivos</option>
-              </select>
+              </Select>
             </Field>
-            <Btn onClick={reload}>Refrescar</Btn>
-          </div>
-        )}
-        {loading ? (
-          <Loading />
-        ) : (
-          <>
-            <Table
-              headers={['Código', 'Nombre', 'Categoría', 'Precio', 'Unidad', 'Estado', 'Acciones']}
-              empty="No hay servicios cargados"
-            >
-              {(data || []).map((extra) => (
-                <tr key={extra.id}>
-                  <td>{extra.codigo}</td>
-                  <td>
-                    {extra.nombre}
-                    {extra.descripcion && <div className="muted">{extra.descripcion}</div>}
-                  </td>
-                  <td>{CATEGORIA_LABEL[extra.categoria] || extra.categoria}</td>
-                  <td className="money">{fmtMoney(extra.precio)}</td>
-                  <td>{UNIDAD_LABEL[extra.unidad] || extra.unidad}</td>
-                  <td>
-                    <Badge>{extra.activo ? 'activo' : 'inactivo'}</Badge>
-                  </td>
-                  <td>
-                    <div className="card-actions">
-                      {admin && (
-                        <>
-                          <Btn size="sm" onClick={() => setEditing(extra)}>
-                            Editar
-                          </Btn>
-                          {extra.activo && (
-                            <Btn size="sm" variant="danger" onClick={() => onDeactivate(extra)}>
-                              Dar de baja
-                            </Btn>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </Table>
-            {pagination && (
-              <div className="pager">
-                <span className="muted">
-                  Página {pagination.page} de {totalPages} · {pagination.total} servicios
-                </span>
-                <div className="card-actions">
-                  <Btn size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                    Anterior
-                  </Btn>
-                  <Btn size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
-                    Siguiente
-                  </Btn>
-                </div>
-              </div>
-            )}
-          </>
-        )}
+          )}
+        </div>
       </Card>
+
+      <ErrorMsg error={actionErr} />
+
+      {loading ? (
+        <Loading />
+      ) : error ? (
+        <ErrorMsg error={error} />
+      ) : (
+        <Card title="Catálogo">
+          <Table
+            headers={['Código', 'Nombre', 'Categoría', 'Precio', 'Unidad', 'Estado', '']}
+            empty="No hay servicios cargados"
+          >
+            {(data || []).map((extra) => (
+              <tr key={extra.id}>
+                <td>{extra.codigo}</td>
+                <td>
+                  {extra.nombre}
+                  {extra.descripcion && <div className="muted">{extra.descripcion}</div>}
+                </td>
+                <td>{CATEGORIA_LABEL[extra.categoria] || extra.categoria}</td>
+                <td className="money">{fmtMoney(extra.precio)}</td>
+                <td>{UNIDAD_LABEL[extra.unidad] || extra.unidad}</td>
+                <td>
+                  <Badge kind={extra.activo ? 'ACTIVO' : 'INACTIVO'} />
+                </td>
+                <td className="spread">
+                  {admin && (
+                    <>
+                      <Btn variant="sm" onClick={() => { setEditing(extra); setCreating(false); }}>
+                        Editar
+                      </Btn>
+                      {extra.activo && (
+                        <Btn variant="sm btn-danger" onClick={() => darDeBaja(extra)}>
+                          Dar de baja
+                        </Btn>
+                      )}
+                    </>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </Table>
+          <Pager pagination={pagination} onPage={setPage} />
+        </Card>
+      )}
     </>
   );
 }

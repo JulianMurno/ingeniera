@@ -10,7 +10,8 @@ const spec = {
       'tarifas, disponibilidad y reservas. El ciclo de vida de una reserva es ' +
       '`CONFIRMADA → EN_CURSO → FINALIZADA`, con las salidas `CANCELADA` y `NO_SHOW`. Al crear y ' +
       'al cancelar una reserva se envía un email al huésped (transporte `log` por defecto, SMTP ' +
-      'si se define `SMTP_URL`).',
+      'si se define `SMTP_URL`). Incluye además pagos y facturación, reportes de gestión, ' +
+      'health check y auditoría de operaciones sensibles.',
   },
   servers: [{ url: '/api/v1' }],
   tags: [
@@ -42,6 +43,23 @@ const spec = {
     { name: 'Disponibilidad' },
     { name: 'Reservas' },
     {
+      name: 'Housekeeping',
+      description:
+        'Programación y seguimiento de tareas de limpieza e inspección. Las tareas avanzan por ' +
+        '`PENDIENTE → EN_PROCESO → LIMPIA → EN_INSPECCION → INSPECCION_OK | INSPECCION_FALLA` (o ' +
+        '`CANCELADA`). El estado de limpieza de una habitación se deriva de su última tarea no ' +
+        'cancelada. Con `HOUSEKEEPING_BLOCK_CHECKIN=true` (default `false`) el check-in se bloquea ' +
+        'con `409 HABITACION_NO_LIMPIA` si la habitación no está `LIMPIA`.',
+    },
+    {
+      name: 'Mantenimiento',
+      description:
+        'Reporte y resolución de incidencias de mantenimiento por habitación, con el ciclo ' +
+        '`ABIERTO → EN_PROCESO → RESUELTO` (o `CANCELADO`, solo `ADMINISTRADOR`). Al resolver un ' +
+        'ticket se crea automáticamente una tarea de `INSPECCION` para la habitación si no hay ya ' +
+        'una inspección pendiente o en curso.',
+    },
+    {
       name: 'Extras',
       description:
         'Catálogo de servicios adicionales del hotel (room service, lavandería, minibar, parking y ' +
@@ -57,6 +75,38 @@ const spec = {
         'Envío de emails al huésped. No expone endpoints: se dispara al crear una reserva ' +
         '(confirmación, con el código, las fechas y la habitación) y al cancelarla (con el motivo y ' +
         'la multa). El transporte es `log` salvo que se defina `SMTP_URL`.',
+    },
+    {
+      name: 'Pagos',
+      description:
+        'Pagos registrados contra una reserva y factura derivada. El pago se registra manualmente ' +
+        '(sin pasarela): `monto` entero en la unidad base, `metodo` y `pagadoEn`. El estado de pago ' +
+        'de la reserva (`PENDIENTE`, `PARCIAL`, `PAGADA`) y el saldo pendiente se derivan de la suma ' +
+        'de sus pagos al consultar el detalle; no hay columna persistida. La factura se genera bajo ' +
+        'demanda a partir de la reserva y sus pagos (numeración local, sin tabla `Invoice`).',
+    },
+    {
+      name: 'Reportes',
+      description:
+        'Ocupación, ingresos y reservas por tipo de habitación para un rango de fechas. Ocupación y ' +
+        'reservas por tipo cuentan reservas vigentes (`CONFIRMADA`, `EN_CURSO`, `FINALIZADA`) en el ' +
+        'rango de noches `[checkIn, checkOut)`; los ingresos suman los pagos por fecha de cobro ' +
+        '(`pagadoEn`) con el rango inclusivo de ambas fechas. Un rango inválido responde `422`.',
+    },
+    {
+      name: 'Salud',
+      description:
+        'Estado de la API y de la base de datos. `GET /health` es público (sin token) y ejecuta ' +
+        '`SELECT 1` contra la base: `200 { status: "ok", db: "ok" }` o `503` con el componente ' +
+        'caído. También queda publicado como `/api/v1/health`.',
+    },
+    {
+      name: 'Auditoría',
+      description:
+        'Trazabilidad de operaciones sensibles: creación, modificación y cancelación de reservas y ' +
+        'gestión de habitaciones y usuarios, con autor, acción, recurso, fecha y detalle en JSON. ' +
+        'La consulta es exclusiva del rol `ADMINISTRADOR` y admite filtros por usuario, acción, ' +
+        'recurso y rango de fechas, con paginación.',
     },
   ],
   paths: {
@@ -410,6 +460,9 @@ const spec = {
       get: {
         tags: ['Habitaciones'],
         summary: 'Obtiene una habitación por id',
+        description:
+          'Incluye `limpieza` (derivada de la última tarea de housekeeping no cancelada) y ' +
+          '`incidenciasAbiertas` (tickets de mantenimiento en `ABIERTO`/`EN_PROCESO`).',
         security: [{ bearerAuth: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
         responses: {
@@ -449,6 +502,23 @@ const spec = {
           403: { $ref: '#/components/responses/Error403' },
           404: { $ref: '#/components/responses/Error404' },
           409: { $ref: '#/components/responses/Error409' },
+        },
+      },
+    },
+    '/rooms/{id}/housekeeping': {
+      get: {
+        tags: ['Habitaciones'],
+        summary: 'Historial de limpieza y mantenimiento de una habitación',
+        description:
+          'Devuelve las tareas de housekeeping y los tickets de mantenimiento de la habitación ' +
+          'combinados en `history`, ordenados por fecha de actividad descendente. Cada entrada ' +
+          'incluye `origen` (`tarea` o `ticket`) además de sus campos propios (entre ellos `tipo`).',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        responses: {
+          200: { description: 'Historial de la habitación' },
+          401: { $ref: '#/components/responses/Error401' },
+          404: { $ref: '#/components/responses/Error404' },
         },
       },
     },
@@ -781,11 +851,14 @@ const spec = {
         tags: ['Reservas'],
         summary: 'Registra el check-in y pasa la reserva a EN_CURSO',
         description:
-          'Solo admite una reserva `CONFIRMADA`; en cualquier otro estado responde `409`.',
+          'Solo admite una reserva `CONFIRMADA`; en cualquier otro estado responde `409`. Si ' +
+          '`HOUSEKEEPING_BLOCK_CHECKIN` está activa y la habitación no está `LIMPIA`, responde ' +
+          '`409` con el código `HABITACION_NO_LIMPIA` y la reserva permanece en `CONFIRMADA`.',
         security: [{ bearerAuth: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
         responses: {
           200: { description: 'Reserva en curso' },
+          401: { $ref: '#/components/responses/Error401' },
           404: { $ref: '#/components/responses/Error404' },
           409: { $ref: '#/components/responses/Error409' },
         },
@@ -1003,6 +1076,396 @@ const spec = {
           401: { $ref: '#/components/responses/Error401' },
           403: { $ref: '#/components/responses/Error403' },
           404: { $ref: '#/components/responses/Error404' },
+        },
+      },
+    },
+    '/housekeeping/tasks': {
+      post: {
+        tags: ['Housekeeping'],
+        summary: 'Programa una tarea de limpieza o inspección (solo Administrador)',
+        description:
+          'La habitación debe existir (`404` en caso contrario). La tarea nace en `PENDIENTE` con ' +
+          'la fecha programada dada y, opcionalmente, un responsable.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/HousekeepingTaskCreate' } },
+          },
+        },
+        responses: {
+          201: { description: 'Tarea creada' },
+          403: { $ref: '#/components/responses/Error403' },
+          404: { $ref: '#/components/responses/Error404' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+      get: {
+        tags: ['Housekeeping'],
+        summary: 'Lista tareas de limpieza con filtros y paginación',
+        description:
+          'Filtros opcionales `estado`, `tipo`, `roomId`, `asignadoAId` y `fecha` (YYYY-MM-DD). ' +
+          'Responde `{ data, pagination }`.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'estado', in: 'query', schema: { type: 'string' } },
+          { name: 'tipo', in: 'query', schema: { type: 'string' } },
+          { name: 'roomId', in: 'query', schema: { type: 'integer' } },
+          { name: 'asignadoAId', in: 'query', schema: { type: 'integer' } },
+          { name: 'fecha', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'pageSize', in: 'query', schema: { type: 'integer', default: 10, maximum: 100 } },
+        ],
+        responses: {
+          200: { description: 'Tareas paginadas' },
+          401: { $ref: '#/components/responses/Error401' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+    },
+    '/housekeeping/tasks/{id}': {
+      patch: {
+        tags: ['Housekeeping'],
+        summary: 'Actualiza una tarea (reclamar, avanzar, asignar o cancelar)',
+        description:
+          'Las transiciones válidas son `PENDIENTE → EN_PROCESO → LIMPIA → EN_INSPECCION → ' +
+          'INSPECCION_OK | INSPECCION_FALLA`, más `CANCELADA` y `INSPECCION_FALLA → EN_PROCESO`. ' +
+          'Una transición inválida o mover un estado terminal responde `409`. Cualquier usuario ' +
+          'autenticado puede reclamar una tarea sin asignar (se asigna a sí mismo) y avanzarla; ' +
+          'asignar a otro usuario y cancelar requieren `ADMINISTRADOR` (`403` en caso contrario).',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/HousekeepingTaskUpdate' } },
+          },
+        },
+        responses: {
+          200: { description: 'Tarea actualizada' },
+          401: { $ref: '#/components/responses/Error401' },
+          403: { $ref: '#/components/responses/Error403' },
+          404: { $ref: '#/components/responses/Error404' },
+          409: { $ref: '#/components/responses/Error409' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+    },
+    '/housekeeping/resumen': {
+      get: {
+        tags: ['Housekeeping'],
+        summary: 'Resumen de tareas por estado y por responsable',
+        description:
+          'Devuelve `porEstado` (conteo por estado) y `porAsignado` (conteo por responsable). Si la ' +
+          'fecha no es válida responde `422`.',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'fecha', in: 'query', schema: { type: 'string', format: 'date' } }],
+        responses: {
+          200: { description: 'Resumen de carga de trabajo' },
+          401: { $ref: '#/components/responses/Error401' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+    },
+    '/maintenance/tickets': {
+      post: {
+        tags: ['Mantenimiento'],
+        summary: 'Reporta un ticket de mantenimiento',
+        description:
+          'Cualquier usuario autenticado puede reportar una incidencia. La habitación debe existir ' +
+          '(`404`); tipo o prioridad inválidos responden `422`. El ticket nace en `ABIERTO`.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/MaintenanceTicketCreate' } },
+          },
+        },
+        responses: {
+          201: { description: 'Ticket creado' },
+          401: { $ref: '#/components/responses/Error401' },
+          404: { $ref: '#/components/responses/Error404' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+      get: {
+        tags: ['Mantenimiento'],
+        summary: 'Lista tickets de mantenimiento con filtros y paginación',
+        description:
+          'Filtros opcionales `estado`, `prioridad`, `roomId` y `tipo`. Responde `{ data, pagination }`.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'estado', in: 'query', schema: { type: 'string' } },
+          { name: 'prioridad', in: 'query', schema: { type: 'string' } },
+          { name: 'roomId', in: 'query', schema: { type: 'integer' } },
+          { name: 'tipo', in: 'query', schema: { type: 'string' } },
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'pageSize', in: 'query', schema: { type: 'integer', default: 10, maximum: 100 } },
+        ],
+        responses: {
+          200: { description: 'Tickets paginados' },
+          401: { $ref: '#/components/responses/Error401' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+    },
+    '/maintenance/tickets/{id}': {
+      get: {
+        tags: ['Mantenimiento'],
+        summary: 'Obtiene un ticket de mantenimiento',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        responses: {
+          200: { description: 'Ticket encontrado' },
+          401: { $ref: '#/components/responses/Error401' },
+          404: { $ref: '#/components/responses/Error404' },
+        },
+      },
+      patch: {
+        tags: ['Mantenimiento'],
+        summary: 'Actualiza un ticket (avanzar, resolver o cancelar)',
+        description:
+          'Transiciones permitidas: `ABIERTO → EN_PROCESO → RESUELTO` y `ABIERTO|EN_PROCESO → ' +
+          'CANCELADO` (cancelar solo `ADMINISTRADOR`, `403` en caso contrario). Resolver exige una ' +
+          '`resolucion` no vacía (`422` si no viene). Al resolver se crea automáticamente una tarea ' +
+          'de `INSPECCION` para la habitación si no hay ya una `PENDIENTE` o `EN_INSPECCION`.',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/MaintenanceTicketUpdate' } },
+          },
+        },
+        responses: {
+          200: { description: 'Ticket actualizado' },
+          401: { $ref: '#/components/responses/Error401' },
+          403: { $ref: '#/components/responses/Error403' },
+          404: { $ref: '#/components/responses/Error404' },
+          409: { $ref: '#/components/responses/Error409' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+    },
+    '/reservations/{id}/payments': {
+      post: {
+        tags: ['Pagos'],
+        summary: 'Registra un pago contra una reserva',
+        description:
+          'Admite pagos parciales o totales. `monto` debe ser un entero positivo (unidad base de la ' +
+          'moneda) y `metodo` uno de `EFECTIVO`, `TARJETA` o `TRANSFERENCIA`. Si no se envía ' +
+          '`pagadoEn` se registra la fecha de hoy. La respuesta devuelve el estado de pago derivado ' +
+          '(`PENDIENTE`, `PARCIAL`, `PAGADA`) y el saldo pendiente de la reserva.',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/PaymentCreate' } },
+          },
+        },
+        responses: {
+          201: {
+            description: 'Pago registrado',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Payment' } } },
+          },
+          401: { $ref: '#/components/responses/Error401' },
+          404: { $ref: '#/components/responses/Error404' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+    },
+    '/reservations/{id}/invoices': {
+      get: {
+        tags: ['Pagos'],
+        summary: 'Genera la factura de una reserva',
+        description:
+          'Documento derivado (no persistido) armado con la estancia, la tarifa de la habitación, ' +
+          'el total, los pagos registrados, el total pagado y el saldo pendiente. La numeración es ' +
+          'local (`FAC-<código de la reserva>`) y no sigue una secuencia regulada.',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        responses: {
+          200: {
+            description: 'Factura generada',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/Invoice' } },
+            },
+          },
+          401: { $ref: '#/components/responses/Error401' },
+          404: { $ref: '#/components/responses/Error404' },
+        },
+      },
+    },
+    '/reports/ocupacion': {
+      get: {
+        tags: ['Reportes'],
+        summary: 'Ocupación del hotel para un rango de fechas',
+        description:
+          'Suma las noches ocupadas por reservas vigentes (`CONFIRMADA`, `EN_CURSO`, `FINALIZADA`) ' +
+          'en el rango `[checkIn, checkOut)` y las compara contra el total de habitaciones por ' +
+          'noche. El porcentaje se redondea a dos decimales.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: 'checkIn',
+            in: 'query',
+            required: true,
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'checkOut',
+            in: 'query',
+            required: true,
+            schema: { type: 'string', format: 'date' },
+          },
+        ],
+        responses: {
+          200: {
+            description: 'Reporte de ocupación',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/ReportOcupacion' } },
+            },
+          },
+          401: { $ref: '#/components/responses/Error401' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+    },
+    '/reports/ingresos': {
+      get: {
+        tags: ['Reportes'],
+        summary: 'Ingresos cobrados para un rango de fechas',
+        description:
+          'Suma los pagos por fecha de cobro (`pagadoEn`) con el rango inclusivo de ambas fechas y ' +
+          'desglosa el total por método de pago. Es una visión financiera: incluye los pagos de ' +
+          'cualquier reserva, sin filtrar por su estado.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: 'checkIn',
+            in: 'query',
+            required: true,
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'checkOut',
+            in: 'query',
+            required: true,
+            schema: { type: 'string', format: 'date' },
+          },
+        ],
+        responses: {
+          200: {
+            description: 'Reporte de ingresos',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/ReportIngresos' } },
+            },
+          },
+          401: { $ref: '#/components/responses/Error401' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+    },
+    '/reports/reservas-por-tipo': {
+      get: {
+        tags: ['Reportes'],
+        summary: 'Reservas por tipo de habitación para un rango de fechas',
+        description:
+          'Agrupa las reservas vigentes que se solapan con el rango `[checkIn, checkOut)` por el ' +
+          'tipo de su habitación e indica cuántas habitaciones hay de cada tipo.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: 'checkIn',
+            in: 'query',
+            required: true,
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'checkOut',
+            in: 'query',
+            required: true,
+            schema: { type: 'string', format: 'date' },
+          },
+        ],
+        responses: {
+          200: {
+            description: 'Reporte de reservas por tipo',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ReportReservasPorTipo' },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Error401' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+    },
+    '/health': {
+      get: {
+        tags: ['Salud'],
+        summary: 'Estado de la API y de la base de datos',
+        description:
+          'Endpoint público (sin token) que ejecuta `SELECT 1` contra la base. Se publica también en ' +
+          'la raíz del servidor como `GET /health`.',
+        responses: {
+          200: {
+            description: 'API y base operativas',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/HealthStatus' } },
+            },
+          },
+          503: {
+            description: 'Algún componente no responde; `db: "down"` indica la base caída',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/HealthStatus' } },
+            },
+          },
+        },
+      },
+    },
+    '/audit': {
+      get: {
+        tags: ['Auditoría'],
+        summary: 'Consulta los registros de auditoría',
+        description:
+          'Listado paginado de operaciones sensibles, ordenado del más reciente al más antiguo. ' +
+          'Filtros opcionales por usuario, acción, recurso y rango de fechas (`desde`/`hasta`, ' +
+          'inclusivo). Solo el rol `ADMINISTRADOR` puede consultar.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'userId', in: 'query', schema: { type: 'integer', minimum: 1 } },
+          {
+            name: 'accion',
+            in: 'query',
+            schema: { type: 'string', enum: ['CREAR', 'MODIFICAR', 'CANCELAR', 'ELIMINAR'] },
+          },
+          {
+            name: 'recurso',
+            in: 'query',
+            schema: { type: 'string', enum: ['RESERVA', 'HABITACION', 'USUARIO'] },
+          },
+          { name: 'desde', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'hasta', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+          {
+            name: 'pageSize',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 100, default: 10 },
+          },
+        ],
+        responses: {
+          200: {
+            description: 'Registros de auditoría paginados',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/AuditLogList' } },
+            },
+          },
+          401: { $ref: '#/components/responses/Error401' },
+          403: { $ref: '#/components/responses/Error403' },
+          422: { $ref: '#/components/responses/Error422' },
         },
       },
     },
@@ -1323,6 +1786,25 @@ const spec = {
           },
           earlyCheckIn: { $ref: '#/components/schemas/EarlyCheckIn' },
           lateCheckOut: { $ref: '#/components/schemas/LateCheckOut' },
+          estadoPago: {
+            $ref: '#/components/schemas/EstadoPago',
+            description:
+              'Derivado de la suma de pagos. Solo se devuelve en el detalle ' +
+              '(`GET /reservations/{id}`)',
+          },
+          totalPagado: {
+            type: 'integer',
+            description: 'Suma de los pagos de la reserva; solo en el detalle',
+          },
+          saldoPendiente: {
+            type: 'integer',
+            description: 'Total menos lo pagado; solo en el detalle',
+          },
+          pagos: {
+            type: 'array',
+            description: 'Pagos registrados contra la reserva; solo en el detalle',
+            items: { $ref: '#/components/schemas/Payment' },
+          },
         },
       },
       ReservationCreate: {
@@ -1598,6 +2080,280 @@ const spec = {
           desde: { type: 'string', format: 'date' },
           hasta: { type: 'string', format: 'date' },
           totalPeriodo: { type: 'integer' },
+        },
+      },
+      EstadoHousekeeping: {
+        type: 'string',
+        enum: ['PENDIENTE', 'EN_PROCESO', 'LIMPIA', 'EN_INSPECCION', 'INSPECCION_OK', 'INSPECCION_FALLA', 'CANCELADA'],
+      },
+      TipoHousekeeping: {
+        type: 'string',
+        enum: ['LIMPIEZA', 'LIMPIEZA_PROFUNDA', 'LINNERIA', 'INSPECCION'],
+      },
+      HousekeepingTask: {
+        type: 'object',
+        properties: {
+          id: { type: 'integer' },
+          roomId: { type: 'integer' },
+          tipo: { $ref: '#/components/schemas/TipoHousekeeping' },
+          estado: { $ref: '#/components/schemas/EstadoHousekeeping' },
+          asignadoAId: { type: 'integer', nullable: true },
+          fechaProgramada: { type: 'string', format: 'date-time' },
+          observaciones: { type: 'string', nullable: true },
+          creadoEn: { type: 'string', format: 'date-time' },
+          actualizadoEn: { type: 'string', format: 'date-time' },
+        },
+      },
+      HousekeepingTaskCreate: {
+        type: 'object',
+        required: ['roomId', 'tipo', 'fechaProgramada'],
+        properties: {
+          roomId: { type: 'integer' },
+          tipo: { $ref: '#/components/schemas/TipoHousekeeping' },
+          fechaProgramada: { type: 'string', format: 'date-time' },
+          asignadoAId: { type: 'integer' },
+          observaciones: { type: 'string' },
+        },
+      },
+      HousekeepingTaskUpdate: {
+        type: 'object',
+        properties: {
+          estado: { $ref: '#/components/schemas/EstadoHousekeeping' },
+          asignadoAId: { type: 'integer', nullable: true },
+          observaciones: { type: 'string' },
+          fechaProgramada: { type: 'string', format: 'date-time' },
+        },
+      },
+      EstadoTicket: {
+        type: 'string',
+        enum: ['ABIERTO', 'EN_PROCESO', 'RESUELTO', 'CANCELADO'],
+      },
+      PrioridadTicket: {
+        type: 'string',
+        enum: ['BAJA', 'MEDIA', 'ALTA', 'URGENTE'],
+      },
+      TipoTicket: {
+        type: 'string',
+        enum: ['FUGA', 'AVERIA', 'ELECTRICA', 'LIMPIEZA_REACTIVA', 'OTRO'],
+      },
+      MaintenanceTicket: {
+        type: 'object',
+        properties: {
+          id: { type: 'integer' },
+          roomId: { type: 'integer' },
+          tipo: { $ref: '#/components/schemas/TipoTicket' },
+          prioridad: { $ref: '#/components/schemas/PrioridadTicket' },
+          estado: { $ref: '#/components/schemas/EstadoTicket' },
+          descripcion: { type: 'string' },
+          resolucion: { type: 'string', nullable: true },
+          reportadoPorId: { type: 'integer' },
+          asignadoAId: { type: 'integer', nullable: true },
+          creadoEn: { type: 'string', format: 'date-time' },
+          actualizadoEn: { type: 'string', format: 'date-time' },
+          resueltoEn: { type: 'string', format: 'date-time', nullable: true },
+        },
+      },
+      MaintenanceTicketCreate: {
+        type: 'object',
+        required: ['roomId', 'tipo', 'prioridad', 'descripcion'],
+        properties: {
+          roomId: { type: 'integer' },
+          tipo: { $ref: '#/components/schemas/TipoTicket' },
+          prioridad: { $ref: '#/components/schemas/PrioridadTicket' },
+          descripcion: { type: 'string', minLength: 1 },
+        },
+      },
+      MaintenanceTicketUpdate: {
+        type: 'object',
+        properties: {
+          estado: { $ref: '#/components/schemas/EstadoTicket' },
+          asignadoAId: { type: 'integer', nullable: true },
+          resolucion: { type: 'string' },
+        },
+      },
+      EstadoPago: {
+        type: 'string',
+        enum: ['PENDIENTE', 'PARCIAL', 'PAGADA'],
+        description:
+          'Derivado de la suma de pagos contra el total de la reserva: sin pagos `PENDIENTE`, ' +
+          'pagos inferiores al total `PARCIAL` y pagos que cubren el total `PAGADA`. No se ' +
+          'persiste; se calcula al serializar la reserva.',
+      },
+      PaymentCreate: {
+        type: 'object',
+        required: ['monto', 'metodo'],
+        properties: {
+          monto: { type: 'integer', minimum: 1, description: 'Unidad base de la moneda' },
+          metodo: { type: 'string', enum: ['EFECTIVO', 'TARJETA', 'TRANSFERENCIA'] },
+          pagadoEn: {
+            type: 'string',
+            format: 'date',
+            description: 'Fecha del pago en `YYYY-MM-DD`; por defecto, hoy',
+          },
+        },
+      },
+      Payment: {
+        type: 'object',
+        properties: {
+          id: { type: 'integer' },
+          reservationId: { type: 'integer' },
+          monto: { type: 'integer', minimum: 1 },
+          metodo: { type: 'string', enum: ['EFECTIVO', 'TARJETA', 'TRANSFERENCIA'] },
+          pagadoEn: { type: 'string', format: 'date' },
+          createdAt: { type: 'string', format: 'date-time' },
+          estadoPago: { $ref: '#/components/schemas/EstadoPago' },
+          totalPagado: { type: 'integer', description: 'Suma de todos los pagos de la reserva' },
+          saldoPendiente: { type: 'integer', description: 'Total menos lo pagado, nunca negativo' },
+        },
+      },
+      Invoice: {
+        type: 'object',
+        description:
+          'Factura derivada de la reserva y sus pagos; no se persiste ni tiene numeración ' +
+          'secuencial regulada.',
+        properties: {
+          numero: { type: 'string', example: 'FAC-HR-6TN5ZZ' },
+          reservaId: { type: 'integer' },
+          codigo: { type: 'string', nullable: true },
+          emitidaEn: { type: 'string', format: 'date-time' },
+          estadoReserva: { $ref: '#/components/schemas/EstadoReserva' },
+          cliente: {
+            type: 'object',
+            properties: {
+              id: { type: 'integer' },
+              nombre: { type: 'string' },
+              dni: { type: 'string' },
+              email: { type: 'string', format: 'email' },
+            },
+          },
+          habitacion: {
+            type: 'object',
+            properties: {
+              id: { type: 'integer' },
+              numero: { type: 'string' },
+              tipo: { $ref: '#/components/schemas/RoomType' },
+              tarifaBase: { type: 'integer' },
+            },
+          },
+          estancia: {
+            type: 'object',
+            properties: {
+              checkIn: { type: 'string', format: 'date' },
+              checkOut: { type: 'string', format: 'date' },
+              noches: { type: 'integer' },
+              adultos: { type: 'integer' },
+              menores: { type: 'integer' },
+            },
+          },
+          tarifaPromedioPorNoche: { type: 'integer' },
+          total: { type: 'integer' },
+          pagos: { type: 'array', items: { $ref: '#/components/schemas/Payment' } },
+          totalPagado: { type: 'integer' },
+          saldoPendiente: { type: 'integer' },
+          estadoPago: { $ref: '#/components/schemas/EstadoPago' },
+        },
+      },
+      ReportOcupacion: {
+        type: 'object',
+        properties: {
+          checkIn: { type: 'string', format: 'date' },
+          checkOut: { type: 'string', format: 'date' },
+          habitaciones: { type: 'integer', description: 'Habitaciones del hotel' },
+          noches: { type: 'integer', description: 'Noches del rango consultado' },
+          nochesOcupadas: { type: 'integer', description: 'Noches ocupadas por reservas vigentes' },
+          nochesDisponibles: { type: 'integer' },
+          porcentajeOcupacion: { type: 'number', description: '0 a 100, dos decimales' },
+        },
+      },
+      ReportIngresos: {
+        type: 'object',
+        properties: {
+          checkIn: { type: 'string', format: 'date' },
+          checkOut: { type: 'string', format: 'date' },
+          total: { type: 'integer', description: 'Suma de pagos cobrados en el rango' },
+          cantidadPagos: { type: 'integer' },
+          porMetodo: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                metodo: { type: 'string' },
+                cantidad: { type: 'integer' },
+                total: { type: 'integer' },
+              },
+            },
+          },
+        },
+      },
+      ReportReservasPorTipo: {
+        type: 'object',
+        properties: {
+          checkIn: { type: 'string', format: 'date' },
+          checkOut: { type: 'string', format: 'date' },
+          noches: { type: 'integer' },
+          totalReservas: { type: 'integer' },
+          porTipo: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                tipo: { $ref: '#/components/schemas/RoomType' },
+                cantidad: {
+                  type: 'integer',
+                  description: 'Reservas vigentes del tipo en el rango',
+                },
+                habitaciones: { type: 'integer', description: 'Habitaciones del tipo' },
+              },
+            },
+          },
+        },
+      },
+      HealthStatus: {
+        type: 'object',
+        properties: {
+          status: { type: 'string', enum: ['ok', 'degraded'] },
+          api: { type: 'string', enum: ['ok'] },
+          db: { type: 'string', enum: ['ok', 'down'] },
+          timestamp: { type: 'string', format: 'date-time' },
+        },
+      },
+      AuditLog: {
+        type: 'object',
+        properties: {
+          id: { type: 'integer' },
+          userId: { type: 'integer' },
+          accion: { type: 'string', enum: ['CREAR', 'MODIFICAR', 'CANCELAR', 'ELIMINAR'] },
+          recurso: { type: 'string', enum: ['RESERVA', 'HABITACION', 'USUARIO'] },
+          recursoId: { type: 'string', nullable: true },
+          detalle: {
+            type: 'string',
+            nullable: true,
+            description: 'JSON serializado con el detalle de la operación',
+          },
+          createdAt: { type: 'string', format: 'date-time' },
+          user: {
+            type: 'object',
+            description: 'Autor de la operación',
+            properties: {
+              id: { type: 'integer' },
+              username: { type: 'string' },
+              rol: { $ref: '#/components/schemas/Rol' },
+            },
+          },
+        },
+      },
+      AuditLogList: {
+        type: 'object',
+        properties: {
+          data: { type: 'array', items: { $ref: '#/components/schemas/AuditLog' } },
+          pagination: {
+            type: 'object',
+            properties: {
+              page: { type: 'integer' },
+              pageSize: { type: 'integer' },
+              total: { type: 'integer' },
+            },
+          },
         },
       },
     },

@@ -1,10 +1,20 @@
 'use client';
 
 import { useState } from 'react';
-import { getToken } from '@/lib/api';
-import { useData } from '@/hooks/useData';
-import { CATEGORIA_LABEL, fmtMoney, todayISO, toISODate } from '@/lib/format';
-import { Btn, Card, ErrorMsg, Field, Input, Loading, Table } from '@/components/ui';
+import { toISODate, todayISO } from '@/lib/api';
+import {
+  Btn,
+  CATEGORIA_LABEL,
+  Card,
+  ErrorMsg,
+  Field,
+  Input,
+  Loading,
+  Table,
+  fmtDate,
+  fmtMoney,
+} from '@/components/ui';
+import { useData } from '@/lib/useData';
 
 function daysAgo(n) {
   const d = new Date();
@@ -17,33 +27,20 @@ export default function ConsumoPage() {
   const [hasta, setHasta] = useState(() => todayISO());
   const [rango, setRango] = useState(null);
 
-  const qs = rango ? new URLSearchParams({ desde: rango.desde, hasta: rango.hasta }).toString() : null;
-  const { data, loading, error, reload } = useData(qs ? `/extras/consumo?${qs}` : null);
+  const qs = rango ? new URLSearchParams(rango).toString() : null;
+  const { data, raw, loading, error } = useData(qs ? `/api/v1/extras/consumo?${qs}` : null);
 
-  if (!getToken()) {
-    return (
-      <Card title="Inicia sesión">
-        <p className="muted">Necesitás sesión para ver el reporte de consumo.</p>
-      </Card>
-    );
-  }
-
-  function aplicar(e) {
+  function consultar(e) {
     e.preventDefault();
     setRango({ desde, hasta });
   }
 
-  const items = data || [];
-  const total = items.reduce((acc, item) => acc + item.importe, 0);
-
   return (
     <>
-      <div className="spread">
-        <h1>Reporte de consumo de servicios</h1>
-      </div>
+      <h1>Consumo de servicios</h1>
 
-      <Card>
-        <form className="row" onSubmit={aplicar}>
+      <Card title="Período">
+        <form className="row" onSubmit={consultar}>
           <Field label="Desde">
             <Input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} required />
           </Field>
@@ -53,34 +50,28 @@ export default function ConsumoPage() {
           <Btn type="submit" variant="primary">
             Consultar
           </Btn>
-          <Btn onClick={reload}>Refrescar</Btn>
         </form>
-        <p className="muted">
-          Solo se consideran cargos vigentes (no anulados) registrados dentro del rango.
-        </p>
+        <p className="muted">Solo se consideran los cargos vigentes (no anulados) del período.</p>
       </Card>
 
-      <ErrorMsg error={error} />
-
-      {loading ? (
+      {!rango ? null : loading ? (
         <Loading />
+      ) : error ? (
+        <ErrorMsg error={error} />
       ) : (
-        <Card>
-          <div className="spread" style={{ marginBottom: 12 }}>
-            <span className="muted">
-              {rango ? `${rango.desde} → ${rango.hasta}` : 'Elegí un rango para consultar'}
-            </span>
-            <span className="stat-value">{fmtMoney(total)}</span>
-          </div>
+        <Card
+          title={`Consumo ${fmtDate(raw?.desde)} → ${fmtDate(raw?.hasta)}`}
+          actions={<span className="money">Total: {fmtMoney(raw?.totalPeriodo)}</span>}
+        >
           <Table
             headers={['Código', 'Servicio', 'Categoría', 'Cantidad', 'Importe']}
             empty="No hay consumo en el período"
           >
-            {items.map((item, i) => (
-              <tr key={i}>
-                <td>{item.codigo || item.extraId}</td>
-                <td>{item.nombre || '—'}</td>
-                <td>{CATEGORIA_LABEL[item.categoria] || item.categoria || '—'}</td>
+            {(data || []).map((item) => (
+              <tr key={item.extraId}>
+                <td>{item.codigo}</td>
+                <td>{item.nombre}</td>
+                <td>{CATEGORIA_LABEL[item.categoria] || item.categoria}</td>
                 <td>{item.cantidad}</td>
                 <td className="money">{fmtMoney(item.importe)}</td>
               </tr>

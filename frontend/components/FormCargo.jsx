@@ -2,15 +2,14 @@
 
 import { useState } from 'react';
 import { api } from '@/lib/api';
-import { fmtMoney } from '@/lib/format';
-import { Btn, ErrorMsg, Field, Input, OkMsg, Select } from './ui';
+import { Btn, ErrorMsg, Field, Input, Msg, Select, UNIDAD_LABEL, fmtMoney } from '@/components/ui';
 
 export default function FormCargo({ extras, reservationId, onDone }) {
   const [extraId, setExtraId] = useState(extras[0]?.id || '');
   const [cantidad, setCantidad] = useState(1);
   const [nota, setNota] = useState('');
   const [error, setError] = useState(null);
-  const [ok, setOk] = useState(null);
+  const [ok, setOk] = useState('');
   const [busy, setBusy] = useState(false);
 
   const selected = extras.find((e) => e.id === Number(extraId));
@@ -19,18 +18,13 @@ export default function FormCargo({ extras, reservationId, onDone }) {
   async function onSubmit(e) {
     e.preventDefault();
     setError(null);
-    setOk(null);
-    if (!extraId) {
-      setError({ message: 'Elegí un servicio' });
-      return;
-    }
+    setOk('');
     setBusy(true);
     try {
-      await api(`/reservations/${reservationId}/charges`, {
-        method: 'POST',
-        body: { extraId: Number(extraId), cantidad: Number(cantidad), nota: nota || null },
-      });
-      setOk('Cargo registrado');
+      const body = { extraId: Number(extraId), cantidad: Number(cantidad) };
+      if (nota) body.nota = nota;
+      await api(`/api/v1/reservations/${reservationId}/charges`, { method: 'POST', body });
+      setOk('Cargo registrado.');
       setCantidad(1);
       setNota('');
       onDone();
@@ -44,13 +38,13 @@ export default function FormCargo({ extras, reservationId, onDone }) {
   return (
     <form onSubmit={onSubmit}>
       <ErrorMsg error={error} />
-      <OkMsg message={ok} />
-      <div className="grid grid-2">
+      <Msg>{ok}</Msg>
+      <div className="row">
         <Field label="Servicio">
           <Select value={extraId} onChange={(e) => setExtraId(e.target.value)}>
             {extras.map((e) => (
               <option key={e.id} value={e.id}>
-                {e.nombre} ({fmtMoney(e.precio)} / {e.unidad})
+                {e.nombre} ({fmtMoney(e.precio)} / {UNIDAD_LABEL[e.unidad] || e.unidad})
               </option>
             ))}
           </Select>
@@ -61,13 +55,11 @@ export default function FormCargo({ extras, reservationId, onDone }) {
             min="1"
             step="1"
             value={cantidad}
-            onChange={(e) => setCantidad(Number(e.target.value))}
+            onChange={(e) => setCantidad(e.target.value)}
             required
           />
         </Field>
-      </div>
-      <div className="row">
-        <Field label="Nota (opcional)">
+        <Field label="Nota">
           <Input value={nota} onChange={(e) => setNota(e.target.value)} />
         </Field>
         <Field label="Importe estimado">

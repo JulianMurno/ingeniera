@@ -2,8 +2,16 @@
 
 import { useState } from 'react';
 import { api } from '@/lib/api';
-import { CATEGORIA_LABEL, UNIDAD_LABEL } from '@/lib/format';
-import { Btn, ErrorMsg, Field, Input, OkMsg, Select } from './ui';
+import {
+  Btn,
+  CATEGORIA_LABEL,
+  ErrorMsg,
+  Field,
+  Input,
+  Msg,
+  Select,
+  UNIDAD_LABEL,
+} from '@/components/ui';
 
 const CATEGORIAS = Object.keys(CATEGORIA_LABEL);
 const UNIDADES = Object.keys(UNIDAD_LABEL);
@@ -19,7 +27,7 @@ export default function FormExtra({ initial, onDone, onCancel }) {
     descripcion: initial?.descripcion || '',
   });
   const [error, setError] = useState(null);
-  const [ok, setOk] = useState(null);
+  const [ok, setOk] = useState('');
   const [busy, setBusy] = useState(false);
 
   function set(field, value) {
@@ -29,18 +37,19 @@ export default function FormExtra({ initial, onDone, onCancel }) {
   async function onSubmit(e) {
     e.preventDefault();
     setError(null);
-    setOk(null);
+    setOk('');
     setBusy(true);
     try {
-      const body = { ...form, descripcion: form.descripcion || null };
+      const body = { ...form, precio: Number(form.precio) };
+      if (!body.descripcion) delete body.descripcion;
       if (editing) {
-        await api(`/extras/${initial.id}`, { method: 'PATCH', body });
-        setOk('Servicio actualizado');
+        await api(`/api/v1/extras/${initial.id}`, { method: 'PATCH', body });
+        setOk('Servicio actualizado.');
       } else {
-        await api('/extras', { method: 'POST', body });
-        setOk('Servicio creado');
-        onDone();
+        await api('/api/v1/extras', { method: 'POST', body });
+        setOk('Servicio creado.');
       }
+      onDone();
     } catch (err) {
       setError(err);
     } finally {
@@ -51,9 +60,9 @@ export default function FormExtra({ initial, onDone, onCancel }) {
   return (
     <form onSubmit={onSubmit}>
       <ErrorMsg error={error} />
-      <OkMsg message={ok} />
+      <Msg>{ok}</Msg>
       <div className="grid grid-2">
-        <Field label="Código">
+        <Field label="Código *">
           <Input
             value={form.codigo}
             onChange={(e) => set('codigo', e.target.value.toUpperCase())}
@@ -61,7 +70,7 @@ export default function FormExtra({ initial, onDone, onCancel }) {
             required
           />
         </Field>
-        <Field label="Nombre">
+        <Field label="Nombre *">
           <Input value={form.nombre} onChange={(e) => set('nombre', e.target.value)} required />
         </Field>
         <Field label="Categoría">
@@ -73,17 +82,17 @@ export default function FormExtra({ initial, onDone, onCancel }) {
             ))}
           </Select>
         </Field>
-        <Field label="Precio (por unidad, en pesos)">
+        <Field label="Precio (por unidad) *">
           <Input
             type="number"
             min="1"
             step="1"
             value={form.precio}
-            onChange={(e) => set('precio', Number(e.target.value))}
+            onChange={(e) => set('precio', e.target.value)}
             required
           />
         </Field>
-        <Field label="Unidad de cobro (informativa)">
+        <Field label="Unidad de cobro">
           <Select value={form.unidad} onChange={(e) => set('unidad', e.target.value)}>
             {UNIDADES.map((u) => (
               <option key={u} value={u}>
@@ -92,20 +101,16 @@ export default function FormExtra({ initial, onDone, onCancel }) {
             ))}
           </Select>
         </Field>
+        <Field label="Descripción">
+          <Input value={form.descripcion} onChange={(e) => set('descripcion', e.target.value)} />
+        </Field>
       </div>
-      <Field label="Descripción (opcional)">
-        <textarea
-          className="input"
-          value={form.descripcion}
-          onChange={(e) => set('descripcion', e.target.value)}
-        />
-      </Field>
-      <div className="card-actions">
+      <div className="row">
         <Btn type="submit" variant="primary" disabled={busy}>
           {editing ? 'Guardar cambios' : 'Crear servicio'}
         </Btn>
         {onCancel && (
-          <Btn onClick={onCancel} disabled={busy}>
+          <Btn type="button" onClick={onCancel} disabled={busy}>
             Cancelar
           </Btn>
         )}

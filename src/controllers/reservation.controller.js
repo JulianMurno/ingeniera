@@ -2,7 +2,7 @@ const reservationService = require('../services/reservation.service');
 
 async function createReservation(req, res, next) {
   try {
-    const reservation = await reservationService.createReservation(req.body);
+    const reservation = await reservationService.createReservation(req.body, req.user);
     return res.status(201).json(reservation);
   } catch (err) {
     return next(err);
@@ -32,7 +32,7 @@ async function getReservation(req, res, next) {
 
 async function updateReservation(req, res, next) {
   try {
-    const reservation = await reservationService.updateReservation(req.params.id, req.body);
+    const reservation = await reservationService.updateReservation(req.params.id, req.body, req.user);
     return res.json(reservation);
   } catch (err) {
     return next(err);
@@ -41,7 +41,7 @@ async function updateReservation(req, res, next) {
 
 async function cancelReservation(req, res, next) {
   try {
-    const reservation = await reservationService.cancelReservation(req.params.id, req.body);
+    const reservation = await reservationService.cancelReservation(req.params.id, req.body, req.user);
     return res.json(reservation);
   } catch (err) {
     return next(err);

@@ -1,13 +1,12 @@
-import path from 'path';
-import { fileURLToPath } from 'url';
+const API_URL = process.env.API_URL || 'http://localhost:3000';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-/** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  turbopack: {
-    root: __dirname,
+  async rewrites() {
+    return [
+      { source: '/api/:path*', destination: `${API_URL}/api/:path*` },
+      { source: '/health', destination: `${API_URL}/health` },
+    ];
   },
 };
 

@@ -85,6 +85,22 @@ Toda ruta protegida requiere `Authorization: Bearer <token>` (obtenido en `POST 
 | PATCH  | `/api/v1/extras/{id}`              | Edita un servicio (código duplicado `409`)        | ADMINISTRADOR |
 | DELETE | `/api/v1/extras/{id}`              | Da de baja un servicio (borrado lógico)           | ADMINISTRADOR |
 | GET    | `/api/v1/extras/consumo?desde=&hasta=` | Consumo por servicio en el período (excluye anulados) | autenticado   |
+| POST   | `/api/v1/housekeeping/tasks`       | Programa tarea de limpieza/inspección            | ADMINISTRADOR |
+| GET    | `/api/v1/housekeeping/tasks`       | Lista tareas con filtros y paginación            | autenticado   |
+| PATCH  | `/api/v1/housekeeping/tasks/{id}`   | Actualiza tarea (avanza, asigna, cancela)        | autenticado   |
+| GET    | `/api/v1/housekeeping/resumen`      | Resumen de tareas por estado y responsable       | autenticado   |
+| GET    | `/api/v1/rooms/{id}/housekeeping`   | Historial de limpieza y mantenimiento de habitación | autenticado   |
+| POST   | `/api/v1/maintenance/tickets`       | Reporta ticket de mantenimiento                  | autenticado   |
+| GET    | `/api/v1/maintenance/tickets`       | Lista tickets con filtros y paginación           | autenticado   |
+| GET    | `/api/v1/maintenance/tickets/{id}`  | Detalle de ticket                                | autenticado   |
+| PATCH  | `/api/v1/maintenance/tickets/{id}`  | Actualiza ticket (resuelve/cancela)              | autenticado   |
+| POST   | `/api/v1/reservations/{id}/payments` | Registra un pago contra la reserva             | autenticado   |
+| GET    | `/api/v1/reservations/{id}/invoices` | Genera la factura de la reserva                | autenticado   |
+| GET    | `/api/v1/reports/ocupacion`          | Ocupación del hotel para un rango              | autenticado   |
+| GET    | `/api/v1/reports/ingresos`           | Ingresos cobrados para un rango                | autenticado   |
+| GET    | `/api/v1/reports/reservas-por-tipo`  | Reservas vigentes por tipo de habitación       | autenticado   |
+| GET    | `/api/v1/audit`                      | Registros de auditoría (filtros y paginación)  | ADMINISTRADOR |
+| GET    | `/health` y `/api/v1/health`         | Estado de la API y de la base de datos         | público       |
 
 ## Autenticación y sesión
 
@@ -233,17 +249,17 @@ del período por servicio y devuelve `{ data, totalPeriodo }`.
 `registrar cargo → anular (si aplica) → facturar`. El dato para la factura es `totalGeneral`
 (`totalEstadia` + `totalServicios`). 
 
-> **Integración pendiente**: cuando `add-cross-cutting-features` esté mergeado, `GET /reservations/{id}/invoices`
-> debe desglosar `totalEstadia` y `totalServicios` (una línea en el builder de la factura usando
-> `extra.service.resumenCargos`), y registrar/anular cargos debería llamar a `audit()`. Hasta entonces
-> la factura sigue usando sólo `Reservation.total`.
+> **Integración pendiente** (tareas 4.2 y 4.3): `add-cross-cutting-features` ya está en `main`, pero
+> `GET /reservations/{id}/invoices` todavía no desglosa `totalEstadia` y `totalServicios` (falta usar
+> `extras.service.resumenCargos` en el builder de la factura), y registrar/anular cargos todavía no
+> llama a `audit()`. Hasta entonces la factura sigue usando sólo `Reservation.total`.
 
 ## Frontend (Next.js)
 
 Panel web en `frontend/` (Next.js App Router, JavaScript) que consume la API de `http://localhost:3000`.
-Cubre el alcance de este cambio: listado de reservas con link a detalle, registro/anulación de cargos
-y resumen por reserva, administración (solo `ADMINISTRADOR`) del catálogo de extras, y reporte de
-consumo por período.
+Servicios adicionales: pantalla **Extras** (catálogo; alta, edición y baja solo `ADMINISTRADOR`),
+pantalla **Consumo** (reporte por período) y, en el detalle de cada reserva, la sección de cargos con
+su resumen (registrar cargo; anular solo `ADMINISTRADOR`).
 
 ```bash
 cd frontend
@@ -251,9 +267,8 @@ npm install
 npm run dev          # http://localhost:3001
 ```
 
-Sin pantalla de login dedicada: el encabezado tiene un formulario de sesión (usuario/contraseña,
-usuarios del seed) y una casilla para pegar un token `Bearer`. Por defecto apunta a
-`http://localhost:3000/api/v1`; se puede cambiar con `NEXT_PUBLIC_API_URL`.
+Se inicia sesión en `/login` con los usuarios del seed. Next.js redirige `/api/*` y `/health` a la API;
+la URL se cambia con la variable `API_URL`.
 
 ## Notificaciones
 
@@ -338,6 +353,14 @@ Todos los filtros son opcionales y combinables; la respuesta es `{ data, paginat
 
 `checkIn` y `checkOut` van juntos y `checkIn` debe ser anterior a `checkOut`; si no, `422`.
 
+## Housekeeping y Mantenimiento
+
+El flujo operativo es: **programar → limpiar → inspeccionar**.
+
+- `POST /housekeeping/tasks` crea una tarea de limpieza (`PENDIENTE`), los `PATCH` avanzan por `EN_PROCESO → LIMPIA → EN_INSPECCION → INSPECCION_OK | INSPECCION_FALLA` (o `CANCELADA`). `GET /housekeeping/tasks` filtra por `estado`, `tipo`, `roomId`, `asignadoAId` y `fecha`, y `GET /housekeeping/resumen` agrupa por estado y por asignatario. El detalle de una habitación (`GET /rooms/{id}`) incluye `limpieza` (derivada de la última tarea no cancelada) e `incidenciasAbiertas`, y `GET /rooms/{id}/housekeeping` devuelve el historial combinado de tareas y tickets.
+- `POST /maintenance/tickets` registra una incidencia; `PATCH /maintenance/tickets/{id}` la mueve por `ABIERTO → EN_PROCESO → RESUELTO` (o `CANCELADO`, solo administrador). Al resolver un ticket se crea automáticamente una tarea de `INSPECCION` para esa habitación (sin duplicar si ya hay una `PENDIENTE`/`EN_INSPECCION`).
+- `HOUSEKEEPING_BLOCK_CHECKIN` (default `false`): si está activa, el check-in de una reserva responde `409 HABITACION_NO_LIMPIA` cuando la habitación no está `LIMPIA`.
+
 ## Reglas de disponibilidad y tarifas
 
 ### Configuración por entorno
@@ -347,6 +370,7 @@ Todos los filtros son opcionales y combinables; la respuesta es `{ data, paginat
 | `MIN_STAY_NIGHTS`   | `1`         | Noches mínimas de una estancia (`422` si el rango no alcanza)  |
 | `MAX_STAY_NIGHTS`   | `30`        | Noches máximas de una estancia (`422` si el rango las supera)  |
 | `MIN_ADVANCE_NIGHTS`| `0`         | Noches mínimas de antelación desde hoy (`422` si no se cumple) |
+| `HOUSEKEEPING_BLOCK_CHECKIN`| `false` | Si `true`, bloquea check-in cuando habitación no está `LIMPIA` (`409 HABITACION_NO_LIMPIA`) |
 | `CHECK_IN_HOUR`     | `15:00`     | Hora de ingreso; un ingreso antes ocupa el día completo       |
 | `CHECK_OUT_HOUR`    | `11:00`     | Hora de egreso; una salida después ocupa el día completo       |
 | `CANCELLATION_FEE_PERCENT` | `0` | Porcentaje del total que se cobra como multa al cancelar       |
@@ -394,6 +418,81 @@ La tarifa efectiva de cada noche se resuelve con esta precedencia:
 `GET /rates/quote?roomType=&checkIn=&checkOut=` devuelve el desglose noche por noche con la
 tarifa aplicada y su `origen`, además del `total` del rango. Ese mismo cálculo es el que
 usa `reservation.service` para el `total` al crear y al modificar una reserva.
+
+## Pagos y facturación
+
+Los pagos se registran de forma manual contra una reserva (no hay pasarela), y el estado de pago
+es **derivado**: se calcula al serializar el detalle de la reserva comparando la suma de pagos
+contra el `total`, sin columna persistida.
+
+### `POST /reservations/{id}/payments`
+
+| Campo       | Tipo     | Reglas                                                        |
+| ----------- | -------- | ------------------------------------------------------------- |
+| `monto`     | `int`    | Obligatorio, entero positivo (unidad base de la moneda)       |
+| `metodo`    | `enum`   | `EFECTIVO` \| `TARJETA` \| `TRANSFERENCIA`                    |
+| `pagadoEn`  | `date?`  | Fecha del cobro en `YYYY-MM-DD`; por defecto, hoy             |
+
+La respuesta (`201`) devuelve el pago creado y el estado derivado de la reserva: `estadoPago`
+(`PENDIENTE` / `PARCIAL` / `PAGADA`), `totalPagado` y `saldoPendiente`. Una reserva inexistente
+responde `404` y un `monto` inválido `422`. Se aceptan **pagos parciales**: el saldo pendiente
+nunca baja de `0` y no hay límite de pagos por reserva.
+
+El detalle de la reserva (`GET /reservations/{id}`) incluye ahora `estadoPago`, `totalPagado`,
+`saldoPendiente` y la lista de `pagos`.
+
+### `GET /reservations/{id}/invoices`
+
+Genera la **factura** de la reserva bajo demanda (no se persiste, no hay tabla `Invoice`): se arma
+con los datos del huésped, la habitación y su tarifa base, la estancia, el `total`, los pagos
+registrados, el `totalPagado` y el `saldoPendiente`. La numeración es local (`FAC-<código de la
+reserva>`) y no sigue una secuencia regulada por un ente fiscal.
+
+## Reportes
+
+Todos los reportes piden `checkIn` y `checkOut` (obligatorios, `YYYY-MM-DD`); un rango inválido
+(`checkIn >= checkOut`) responde `422`.
+
+| Endpoint                        | Qué mide                                                                             |
+| ------------------------------- | ------------------------------------------------------------------------------------ |
+| `GET /reports/ocupacion`        | Noches ocupadas sobre el total de habitaciones por noche, con `porcentajeOcupacion`   |
+| `GET /reports/ingresos`         | Suma de pagos por fecha de cobro (`pagadoEn`) desglosada `porMetodo`                 |
+| `GET /reports/reservas-por-tipo`| Reservas vigentes por tipo de habitación, con las habitaciones de cada tipo          |
+
+Reglas de conteo:
+
+- Ocupación y reservas por tipo cuentan reservas **vigentes** (`CONFIRMADA`, `EN_CURSO`,
+  `FINALIZADA`) en el rango de noches `[checkIn, checkOut)` (la noche de `checkOut` queda fuera).
+- Los ingresos suman **todos** los pagos cobrados en el rango inclusivo `[checkIn, checkOut]`,
+  con independencia del estado de la reserva, y redondean el porcentaje a dos decimales cuando
+  corresponde.
+
+## Salud (health check)
+
+`GET /health` es **público** (no requiere token) y también se publica como `/api/v1/health`.
+Ejecuta `SELECT 1` contra la base:
+
+- `200 { status: "ok", db: "ok", ... }` si todo funciona.
+- `503` con `db: "down"` si la base no responde (por ejemplo, un archivo SQLite
+  mal ubicado o bloqueado).
+
+## Auditoría
+
+Las operaciones sensibles se registran automáticamente con autor, acción, recurso, fecha y un
+detalle JSON: creación, modificación y cancelación de **reservas**, y gestión (alta, edición,
+baja) de **habitaciones** y **usuarios**. La escritura es **best-effort**: si el registro falla no
+rompe la operación principal.
+
+`GET /audit` (solo `ADMINISTRADOR`) lista los registros del más reciente al más antiguo con
+paginación (`{ data, pagination }`) y filtros opcionales combinables:
+
+| Parámetro   | Efecto                                             |
+| ----------- | -------------------------------------------------- |
+| `userId`    | Solo entradas de ese usuario                       |
+| `accion`    | `CREAR` \| `MODIFICAR` \| `CANCELAR` \| `ELIMINAR` |
+| `recurso`   | `RESERVA` \| `HABITACION` \| `USUARIO`             |
+| `desde` / `hasta` | Rango de fechas inclusivo (`createdAt`)     |
+| `page` / `pageSize` | Paginación (por defecto `1` / `10`, máx. `100`) |
 
 ## Convenciones
 

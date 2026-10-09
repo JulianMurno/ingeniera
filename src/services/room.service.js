@@ -1,13 +1,33 @@
 const roomRepo = require('../repositories/room.repository');
+const housekeepingRepo = require('../repositories/housekeeping.repository');
+const maintenanceRepo = require('../repositories/maintenance.repository');
 const { toDate } = require('./business.service');
 const { HttpError } = require('../lib/httpError');
+const housekeepingService = require('./housekeeping.service');
+const { audit, ACCIONES, RECURSOS } = require('../lib/audit');
 
-async function createRoom(data) {
+async function createRoom(data, actor = null) {
   const existing = await roomRepo.findByNumero(data.numero);
   if (existing) {
     throw new HttpError(409, 'CONFLICT', 'Ya existe una habitación con ese número');
   }
-  return roomRepo.create(data);
+  const room = await roomRepo.create(data);
+
+  await audit({
+    actor,
+    accion: ACCIONES.CREAR,
+    recurso: RECURSOS.HABITACION,
+    recursoId: room.id,
+    detalle: {
+      numero: room.numero,
+      tipo: room.tipo,
+      tarifa: room.tarifa,
+      capacidad: room.capacidad,
+      estado: room.estado,
+    },
+  });
+
+  return room;
 }
 
 async function listRooms(params = {}) {
@@ -27,10 +47,12 @@ async function getRoom(id) {
   if (!room) {
     throw new HttpError(404, 'NOT_FOUND', 'Habitación no encontrada');
   }
-  return room;
+  const limpieza = await housekeepingService.getEstadoLimpieza(id);
+  const incidenciasAbiertas = await maintenanceRepo.countOpenByRoomId(id);
+  return { ...room, limpieza, incidenciasAbiertas };
 }
 
-async function updateRoom(id, data) {
+async function updateRoom(id, data, actor = null) {
   if (!(await roomRepo.findById(id))) {
     throw new HttpError(404, 'NOT_FOUND', 'Habitación no encontrada');
   }
@@ -40,11 +62,22 @@ async function updateRoom(id, data) {
       throw new HttpError(409, 'CONFLICT', 'Ya existe una habitación con ese número');
     }
   }
-  return roomRepo.update(id, data);
+  const room = await roomRepo.update(id, data);
+
+  await audit({
+    actor,
+    accion: ACCIONES.MODIFICAR,
+    recurso: RECURSOS.HABITACION,
+    recursoId: id,
+    detalle: { campos: Object.keys(data), numero: room.numero, estado: room.estado },
+  });
+
+  return room;
 }
 
-async function deleteRoom(id) {
-  if (!(await roomRepo.findById(id))) {
+async function deleteRoom(id, actor = null) {
+  const existing = await roomRepo.findById(id);
+  if (!existing) {
     throw new HttpError(404, 'NOT_FOUND', 'Habitación no encontrada');
   }
   try {
@@ -59,6 +92,35 @@ async function deleteRoom(id) {
     }
     throw err;
   }
+
+  await audit({
+    actor,
+    accion: ACCIONES.ELIMINAR,
+    recurso: RECURSOS.HABITACION,
+    recursoId: id,
+    detalle: { numero: existing.numero, tipo: existing.tipo },
+  });
 }
 
-module.exports = { createRoom, listRooms, getRoom, updateRoom, deleteRoom };
+async function getRoomHousekeeping(id) {
+  const room = await roomRepo.findById(id);
+  if (!room) {
+    throw new HttpError(404, 'NOT_FOUND', 'Habitación no encontrada');
+  }
+  const [tasks, tickets] = await Promise.all([
+    housekeepingRepo.findByRoomId(id),
+    maintenanceRepo.findByRoomId(id),
+  ]);
+  const history = [
+    ...tasks.map((t) => ({ origen: 'tarea', ...t })),
+    ...tickets.map((t) => ({ origen: 'ticket', ...t })),
+  ];
+  history.sort((a, b) => {
+    const da = new Date(a.actualizadoEn || a.creadoEn || 0).getTime();
+    const db = new Date(b.actualizadoEn || b.creadoEn || 0).getTime();
+    return db - da;
+  });
+  return { room, history };
+}
+
+module.exports = { createRoom, listRooms, getRoom, updateRoom, deleteRoom, getRoomHousekeeping };
