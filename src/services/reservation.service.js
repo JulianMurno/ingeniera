@@ -4,6 +4,7 @@ const guestRepo = require('../repositories/guest.repository');
 const resRepo = require('../repositories/reservation.repository');
 const rateService = require('./rate.service');
 const notifications = require('./notifications.service');
+const extrasService = require('./extras.service');
 const { buildStay, calculateNights, stayOverlaps, toDate, addDays } = require('./business.service');
 const { getMinAdvanceNights } = require('../config/availabilityRules');
 const { calculateCancellationFee } = require('../config/reservationRules');
@@ -231,12 +232,17 @@ async function listReservations(params) {
   return resRepo.findMany(params);
 }
 
-async function getReservation(id) {
+async function getReservation(id, { incluirCargos = false } = {}) {
   const reservation = await resRepo.findById(id);
   if (!reservation) {
     throw new HttpError(404, 'NOT_FOUND', 'Reserva no encontrada');
   }
-  return paymentService.loadPaymentState(reservation);
+  const withPayments = await paymentService.loadPaymentState(reservation);
+  if (!incluirCargos) {
+    return withPayments;
+  }
+  const resumenCargos = await extrasService.resumenCargos(id);
+  return { ...withPayments, resumenCargos };
 }
 
 async function updateReservation(id, data, actor = null) {

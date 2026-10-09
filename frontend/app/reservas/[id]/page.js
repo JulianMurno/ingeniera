@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { api, todayISO } from '@/lib/api';
+import { api, isAdmin, todayISO } from '@/lib/api';
 import {
   Badge,
   Btn,
@@ -21,6 +21,7 @@ import {
   METODOS_PAGO,
 } from '@/components/ui';
 import { useData } from '@/lib/useData';
+import FormCargo from '@/components/FormCargo';
 
 export default function ReservaDetail() {
   const { id } = useParams();
@@ -157,7 +158,101 @@ export default function ReservaDetail() {
       {showInvoice && <InvoiceCard invoice={invoice} onRefresh={reloadInvoice} />}
 
       <PagosCard reserva={r} onChanged={reload} />
+
+      <CargosCard reserva={r} />
     </>
+  );
+}
+
+function CargosCard({ reserva }) {
+  const admin = isAdmin();
+  const cargos = useData(`/api/v1/reservations/${reserva.id}/charges`);
+  const extras = useData('/api/v1/extras?activo=true&pageSize=100');
+  const [err, setErr] = useState(null);
+  const resumen = cargos.raw?.resumen;
+  const admiteCargos = ['CONFIRMADA', 'EN_CURSO'].includes(reserva.estado);
+  const activos = (extras.data || []).filter((e) => e.activo);
+
+  async function anular(c) {
+    if (!window.confirm(`Anular el cargo de ${c.extra?.nombre || 'servicio'}?`)) return;
+    setErr(null);
+    try {
+      await api(`/api/v1/reservations/${reserva.id}/charges/${c.id}`, { method: 'PATCH' });
+      cargos.reload();
+    } catch (e) {
+      setErr(e);
+    }
+  }
+
+  return (
+    <Card title="Servicios adicionales">
+      <ErrorMsg error={err || cargos.error || extras.error} />
+      {resumen && (
+        <div className="row">
+          <span>
+            Estadía: <span className="money">{fmtMoney(resumen.totalEstadia)}</span>
+          </span>
+          <span>
+            Servicios: <span className="money">{fmtMoney(resumen.totalServicios)}</span>
+          </span>
+          <span>
+            <strong>
+              Total general: <span className="money">{fmtMoney(resumen.totalGeneral)}</span>
+            </strong>
+          </span>
+        </div>
+      )}
+
+      {cargos.loading ? (
+        <Loading />
+      ) : (
+        <Table
+          headers={['Servicio', 'Cantidad', 'P. unitario', 'Importe', 'Estado', 'Fecha', 'Nota', 'Registró', '']}
+          empty="Esta reserva no tiene cargos"
+        >
+          {(cargos.data || []).map((c) => (
+            <tr key={c.id}>
+              <td>
+                {c.extra?.nombre || c.extraId}
+                {c.extra && <div className="muted">{c.extra.codigo}</div>}
+              </td>
+              <td>{c.cantidad}</td>
+              <td className="money">{fmtMoney(c.precioUnitario)}</td>
+              <td className="money">{fmtMoney(c.importe)}</td>
+              <td>
+                <Badge kind={c.estado} />
+                {c.anuladoPor && (
+                  <div className="muted">
+                    por {c.anuladoPor.username} · {fmtDateTime(c.anuladoEn)}
+                  </div>
+                )}
+              </td>
+              <td>{fmtDateTime(c.creadoEn)}</td>
+              <td>{c.nota || '—'}</td>
+              <td>{c.registradoPor?.username || c.registradoPorId}</td>
+              <td>
+                {admin && c.estado !== 'CANCELADO' && (
+                  <Btn variant="sm btn-danger" onClick={() => anular(c)}>
+                    Anular
+                  </Btn>
+                )}
+              </td>
+            </tr>
+          ))}
+        </Table>
+      )}
+
+      {admiteCargos && (
+        <div style={{ marginTop: 12 }}>
+          <strong>Registrar cargo</strong>
+          {activos.length ? (
+            <FormCargo extras={activos} reservationId={reserva.id} onDone={cargos.reload} />
+          ) : (
+            <p className="muted">No hay servicios activos en el catálogo.</p>
+          )}
+        </div>
+      )}
+    </Card>
   );
 }
 

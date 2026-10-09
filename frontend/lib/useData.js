@@ -4,7 +4,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 
 export function useData(source) {
-  const [state, setState] = useState({ data: null, pagination: null, loading: true, error: null });
+  // `raw` conserva la respuesta completa (p. ej. el `resumen` de los cargos)
+  const [state, setState] = useState({
+    data: null,
+    pagination: null,
+    raw: null,
+    loading: true,
+    error: null,
+  });
   const [tick, setTick] = useState(0);
   const mounted = useRef(true);
 
@@ -13,7 +20,7 @@ export function useData(source) {
   useEffect(() => {
     mounted.current = true;
     if (!source) {
-      setState({ data: null, pagination: null, loading: false, error: null });
+      setState({ data: null, pagination: null, raw: null, loading: false, error: null });
       return undefined;
     }
     setState((s) => ({ ...s, loading: true, error: null }));
@@ -23,13 +30,14 @@ export function useData(source) {
         setState({
           data: Array.isArray(res) ? res : res.data,
           pagination: Array.isArray(res) ? null : res.pagination || null,
+          raw: res,
           loading: false,
           error: null,
         });
       })
       .catch((err) => {
         if (!mounted.current) return;
-        setState({ data: null, pagination: null, loading: false, error: err });
+        setState({ data: null, pagination: null, raw: null, loading: false, error: err });
       });
     return () => {
       mounted.current = false;

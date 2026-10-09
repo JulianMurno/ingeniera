@@ -40,7 +40,7 @@ La API queda en `http://localhost:3000/api/v1` y los docs en `http://localhost:3
 
 ## Endpoints
 
-Toda ruta protegida requiere `Authorization: Bearer <token>` (obtenido en `POST /auth/login`). La gestión de habitaciones y de usuarios exige rol `ADMINISTRADOR`.
+Toda ruta protegida requiere `Authorization: Bearer <token>` (obtenido en `POST /auth/login`). La gestión de habitaciones, de usuarios y del catálogo de servicios adicionales exige rol `ADMINISTRADOR`.
 
 | Método | Ruta                               | Descripción                                       | Rol           |
 | ------ | ---------------------------------- | ------------------------------------------------- | ------------- |
@@ -71,12 +71,20 @@ Toda ruta protegida requiere `Authorization: Bearer <token>` (obtenido en `POST 
 | GET    | `/api/v1/availability`             | Habitaciones disponibles por rango, tipo y ocupantes | autenticado |
 | POST   | `/api/v1/reservations`             | Crea una reserva (valida disponibilidad, ocupación y fechas) | autenticado   |
 | GET    | `/api/v1/reservations`             | Lista reservas con filtros y paginación           | autenticado   |
-| GET    | `/api/v1/reservations/{id}`        | Detalle de reserva                                | autenticado   |
+| GET    | `/api/v1/reservations/{id}`        | Detalle de reserva (`?incluirCargos=true` agrega el resumen de cargos) | autenticado   |
 | PATCH  | `/api/v1/reservations/{id}`        | Modifica una reserva (revalida disponibilidad)    | autenticado   |
 | POST   | `/api/v1/reservations/{id}/cancel` | Cancela una reserva confirmada                    | autenticado   |
 | POST   | `/api/v1/reservations/{id}/checkin` | Registra el check-in (`EN_CURSO`)               | autenticado   |
 | POST   | `/api/v1/reservations/{id}/checkout` | Registra el check-out (`FINALIZADA`)            | autenticado   |
 | POST   | `/api/v1/reservations/{id}/no-show` | Marca `NO_SHOW` y libera el rango               | autenticado   |
+| POST   | `/api/v1/reservations/{id}/charges` | Registra un cargo de servicio a la reserva       | autenticado   |
+| GET    | `/api/v1/reservations/{id}/charges` | Cargos de la reserva y resumen (`totalServicios`, `totalGeneral`) | autenticado   |
+| PATCH  | `/api/v1/reservations/{id}/charges/{chargeId}` | Anula un cargo (`CANCELADO` con autor y fecha) | ADMINISTRADOR |
+| GET    | `/api/v1/extras?categoria=&activo=&page=&pageSize=` | Lista el catálogo de servicios (el personal solo ve activos) | autenticado |
+| POST   | `/api/v1/extras`                   | Alta de un servicio adicional                     | ADMINISTRADOR |
+| PATCH  | `/api/v1/extras/{id}`              | Edita un servicio (código duplicado `409`)        | ADMINISTRADOR |
+| DELETE | `/api/v1/extras/{id}`              | Da de baja un servicio (borrado lógico)           | ADMINISTRADOR |
+| GET    | `/api/v1/extras/consumo?desde=&hasta=` | Consumo por servicio en el período (excluye anulados) | autenticado   |
 | POST   | `/api/v1/housekeeping/tasks`       | Programa tarea de limpieza/inspección            | ADMINISTRADOR |
 | GET    | `/api/v1/housekeeping/tasks`       | Lista tareas con filtros y paginación            | autenticado   |
 | PATCH  | `/api/v1/housekeeping/tasks/{id}`   | Actualiza tarea (avanza, asigna, cancela)        | autenticado   |
@@ -202,6 +210,65 @@ ocupación se deriva de las reservas `CONFIRMADA`.
 
 La política antioverbooking suma los ocupantes de las reservas `CONFIRMADA` que solapan el rango
 en la misma habitación: mientras no superen la `capacidad` se aceptan varias reservas solapadas.
+
+## Servicios adicionales y cargos
+
+El hotel registra consumos de servicios (room service, lavandería, minibar, parking, late check-out)
+como **cargos** a una reserva. Los cargos son información derivada: **no modifican `Reservation.total`**
+(el costo de la estadía), sino que se suman por encima vía resumen.
+
+### Catálogo
+
+- `POST /extras`, `PATCH /extras/{id}` y `DELETE /extras/{id}` (baja lógica con `activo = false`) son
+  exclusivos de `ADMINISTRADOR`.
+- El listado `GET /extras` aplica a un `ADMINISTRADOR` los filtros `categoria` y `activo`; un
+  `RECEPCIONISTA` solo ve los servicios **activos** (filtros ignorados).
+- Campos: `codigo` (único, `A-Z 0-9 -`, 2–20), `nombre`, `categoria` (`ALIMENTOS` | `LAVANDERIA` |
+  `TRANSPORTE` | `SERVICIOS` | `OTROS`), `precio` (entero positivo), `unidad` (`NOCHE` |
+  `POR_UNIDAD` | `DIA` | `ESTANCIA`, informativa) y `descripcion` (opcional).
+- Un extra inactivo no puede recibir cargos nuevos (`409`).
+
+### Registro, anulación y resumen
+
+| Acción | Reglas |
+| ------ | ------ |
+| `POST /reservations/{id}/charges` | Reserva existente (`404`); estado `CONFIRMADA` o `EN_CURSO` (`409`); servició activo (`409`); `cantidad >= 1` (`422`). El servidor congela `precioUnitario` del catálogo y calcula `importe = precioUnitario × cantidad`. |
+| `GET /reservations/{id}/charges` | Devuelve `{ data, resumen }` con `totalServicios` (suma de cargos no anulados), `totalGeneral = reserva.total + totalServicios` y `cantidadCargos`. |
+| `PATCH /reservations/{id}/charges/{chargeId}` | Solo `ADMINISTRADOR`; marca el cargo `CANCELADO` con `anuladoPorId` y `anuladoEn` y lo excluye del resumen y del consumo. No se edita la cantidad de un cargo existente: se anula y se registra otro. |
+| `GET /reservations/{id}?incluirCargos=true` | Agrega `resumenCargos` al detalle de la reserva (por defecto ausente). |
+
+El precio queda congelado en el cargo: editar después el catálogo no altera cargos anteriores.
+
+### Consumo
+
+`GET /extras/consumo?desde=&hasta=` (`YYYY-MM-DD`, `desde < hasta`) agrupa los cargos no anulados
+del período por servicio y devuelve `{ data, totalPeriodo }`.
+
+### Flujo de facturación
+
+`registrar cargo → anular (si aplica) → facturar`. El dato para la factura es `totalGeneral`
+(`totalEstadia` + `totalServicios`). 
+
+> **Integración pendiente** (tareas 4.2 y 4.3): `add-cross-cutting-features` ya está en `main`, pero
+> `GET /reservations/{id}/invoices` todavía no desglosa `totalEstadia` y `totalServicios` (falta usar
+> `extras.service.resumenCargos` en el builder de la factura), y registrar/anular cargos todavía no
+> llama a `audit()`. Hasta entonces la factura sigue usando sólo `Reservation.total`.
+
+## Frontend (Next.js)
+
+Panel web en `frontend/` (Next.js App Router, JavaScript) que consume la API de `http://localhost:3000`.
+Servicios adicionales: pantalla **Extras** (catálogo; alta, edición y baja solo `ADMINISTRADOR`),
+pantalla **Consumo** (reporte por período) y, en el detalle de cada reserva, la sección de cargos con
+su resumen (registrar cargo; anular solo `ADMINISTRADOR`).
+
+```bash
+cd frontend
+npm install
+npm run dev          # http://localhost:3001
+```
+
+Se inicia sesión en `/login` con los usuarios del seed. Next.js redirige `/api/*` y `/health` a la API;
+la URL se cambia con la variable `API_URL`.
 
 ## Notificaciones
 

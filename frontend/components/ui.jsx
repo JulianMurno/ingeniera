@@ -22,6 +22,21 @@ export const ROOM_TYPES = {
 
 export const METODOS_PAGO = ['EFECTIVO', 'TARJETA', 'TRANSFERENCIA'];
 
+export const CATEGORIA_LABEL = {
+  ALIMENTOS: 'Alimentos',
+  LAVANDERIA: 'Lavandería',
+  TRANSPORTE: 'Transporte',
+  SERVICIOS: 'Servicios',
+  OTROS: 'Otros',
+};
+
+export const UNIDAD_LABEL = {
+  NOCHE: 'Noche',
+  POR_UNIDAD: 'Por unidad',
+  DIA: 'Día',
+  ESTANCIA: 'Estancia',
+};
+
 export const DIAS = [
   'Domingo',
   'Lunes',
@@ -153,6 +168,8 @@ export function Badge({ kind }) {
     PAGADA: 'Pagada',
     DISPONIBLE: 'Disponible',
     MANTENIMIENTO: 'Mantenimiento',
+    ACTIVO: 'Activo',
+    INACTIVO: 'Inactivo',
     ok: 'OK',
     down: 'Caída',
   };

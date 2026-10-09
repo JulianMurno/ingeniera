@@ -1,5 +1,5 @@
 const { Router } = require('express');
-const { requireAuth } = require('../middlewares/auth.middleware');
+const { requireAuth, authorize } = require('../middlewares/auth.middleware');
 const { validate } = require('../middlewares/validate.middleware');
 const {
   reservationCreateSchema,
@@ -7,6 +7,7 @@ const {
   reservationCancelSchema,
   reservationQuerySchema,
 } = require('../schemas/reservation.schema');
+const { chargeCreateSchema, chargeParamsSchema } = require('../schemas/extras.schema');
 const { idParamSchema } = require('../schemas/room.schema');
 const { paymentCreateSchema } = require('../schemas/payment.schema');
 const { getInvoice, registerPayment } = require('../controllers/payment.controller');
@@ -20,6 +21,11 @@ const {
   checkOutReservation,
   markNoShow,
 } = require('../controllers/reservation.controller');
+const {
+  createCharge,
+  listCharges,
+  cancelCharge,
+} = require('../controllers/extras.controller');
 
 const router = Router();
 
@@ -50,5 +56,19 @@ router.post(
   registerPayment,
 );
 router.get('/:id/invoices', validate(idParamSchema, 'params'), getInvoice);
+
+router.post(
+  '/:id/charges',
+  validate(idParamSchema, 'params'),
+  validate(chargeCreateSchema),
+  createCharge,
+);
+router.get('/:id/charges', validate(idParamSchema, 'params'), listCharges);
+router.patch(
+  '/:id/charges/:chargeId',
+  authorize('ADMINISTRADOR'),
+  validate(chargeParamsSchema, 'params'),
+  cancelCharge,
+);
 
 module.exports = router;

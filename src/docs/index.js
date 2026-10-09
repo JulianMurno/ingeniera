@@ -60,6 +60,16 @@ const spec = {
         'una inspección pendiente o en curso.',
     },
     {
+      name: 'Extras',
+      description:
+        'Catálogo de servicios adicionales del hotel (room service, lavandería, minibar, parking y ' +
+        'late check-out) y cargos de consumo a la reserva. El catálogo lo administra el rol ' +
+        '`ADMINISTRADOR`; el registro y la consulta de cargos admiten `RECEPCIONISTA` y la ' +
+        'anulación de un cargo queda reservada al `ADMINISTRADOR`. El precio unitario se congela ' +
+        'al registrar el cargo y el importe es `precioUnitario × cantidad`. Los cargos se anulan ' +
+        '(`CANCELADO`), no se borran, y no alteran `Reservation.total`.',
+    },
+    {
       name: 'Notificaciones',
       description:
         'Envío de emails al huésped. No expone endpoints: se dispara al crear una reserva ' +
@@ -764,9 +774,19 @@ const spec = {
         summary: 'Obtiene una reserva por id',
         description:
           'Devuelve también el `codigo` de confirmación, las `notas`, los ocupantes y, si está ' +
-          'cancelada, el `motivoCancelacion` y la `multaCancelacion`.',
+          'cancelada, el `motivoCancelacion` y la `multaCancelacion`. Con `?incluirCargos=true` ' +
+          'agrega `resumenCargos` con `totalEstadia`, `totalServicios` y `totalGeneral`.',
         security: [{ bearerAuth: [] }],
-        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'integer' } },
+          {
+            name: 'incluirCargos',
+            in: 'query',
+            required: false,
+            schema: { type: 'boolean', default: false },
+            description: 'Cuando es `true`, agrega el resumen de cargos de servicios a la reserva',
+          },
+        ],
         responses: {
           200: {
             description: 'Reserva encontrada',
@@ -871,6 +891,191 @@ const spec = {
           200: { description: 'Reserva marcada como no-presentación' },
           404: { $ref: '#/components/responses/Error404' },
           409: { $ref: '#/components/responses/Error409' },
+        },
+      },
+    },
+    '/reservations/{id}/charges': {
+      post: {
+        tags: ['Extras', 'Reservas'],
+        summary: 'Registra un cargo de un servicio adicional a la reserva',
+        description:
+          'Congela el `precioUnitario` del catálogo y calcula `importe = precioUnitario × cantidad`. ' +
+          'Solo admite reservas `CONFIRMADA` o `EN_CURSO` (`409` en las demás); el servicio debe ' +
+          'existir y estar activo (`409`); `cantidad` debe ser al menos 1 (`422`); reserva inexistente `404`.',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/ChargeCreate' } },
+          },
+        },
+        responses: {
+          201: {
+            description: 'Cargo registrado',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Charge' } } },
+          },
+          401: { $ref: '#/components/responses/Error401' },
+          404: { $ref: '#/components/responses/Error404' },
+          409: { $ref: '#/components/responses/Error409' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+      get: {
+        tags: ['Extras', 'Reservas'],
+        summary: 'Lista los cargos de una reserva con su resumen',
+        description:
+          'Devuelve el listado de cargos y el resumen con `totalEstadia`, `totalServicios` (cargos no ' +
+          'anulados), `totalGeneral` y `cantidadCargos`. El `total` de la reserva sigue siendo el costo de la estadía.',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        responses: {
+          200: {
+            description: 'Cargos y resumen de la reserva',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/ChargeList' } } },
+          },
+          401: { $ref: '#/components/responses/Error401' },
+          404: { $ref: '#/components/responses/Error404' },
+        },
+      },
+    },
+    '/reservations/{id}/charges/{chargeId}': {
+      patch: {
+        tags: ['Extras', 'Reservas'],
+        summary: 'Anula un cargo de la reserva (solo Administrador)',
+        description:
+          'Marca el cargo como `CANCELADO` con autor y fecha y lo excluye del resumen. Un cargo ya ' +
+          'anulado no vuelve a sumar. Cargo o reserva inexistente `404`; recepcionista `403`.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'integer' } },
+          { name: 'chargeId', in: 'path', required: true, schema: { type: 'integer' } },
+        ],
+        responses: {
+          200: {
+            description: 'Cargo anulado',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Charge' } } },
+          },
+          401: { $ref: '#/components/responses/Error401' },
+          403: { $ref: '#/components/responses/Error403' },
+          404: { $ref: '#/components/responses/Error404' },
+        },
+      },
+    },
+    '/extras': {
+      post: {
+        tags: ['Extras'],
+        summary: 'Registra un servicio adicional del hotel (solo Administrador)',
+        description:
+          'El `codigo` es único (`409` si se repite) y `precio` debe ser positivo (`422`).',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/ExtraCreate' } },
+          },
+        },
+        responses: {
+          201: {
+            description: 'Servicio creado',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/HotelExtra' } } },
+          },
+          401: { $ref: '#/components/responses/Error401' },
+          403: { $ref: '#/components/responses/Error403' },
+          409: { $ref: '#/components/responses/Error409' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+      get: {
+        tags: ['Extras'],
+        summary: 'Lista el catálogo de servicios adicionales',
+        description:
+          'Filtros por `categoria` y `activo` con paginación. Un usuario con rol `RECEPCIONISTA` solo ' +
+          've los servicios activos, sin importar el filtro enviado.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'categoria', in: 'query', schema: { $ref: '#/components/schemas/CategoriaExtra' } },
+          { name: 'activo', in: 'query', schema: { type: 'boolean' } },
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'pageSize', in: 'query', schema: { type: 'integer', default: 10, maximum: 100 } },
+        ],
+        responses: {
+          200: {
+            description: 'Catálogo paginado',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/ExtraList' } } },
+          },
+          401: { $ref: '#/components/responses/Error401' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+    },
+    '/extras/consumo': {
+      get: {
+        tags: ['Extras'],
+        summary: 'Reporte de consumo de servicios por período',
+        description:
+          'Agrupa el importe por servicio dentro del rango `[desde, hasta]` y devuelve el total del ' +
+          'período, excluyendo los cargos anulados. Rango inválido (desde >= hasta) responde `422`.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'desde', in: 'query', required: true, schema: { type: 'string', format: 'date' } },
+          { name: 'hasta', in: 'query', required: true, schema: { type: 'string', format: 'date' } },
+        ],
+        responses: {
+          200: {
+            description: 'Consumo por servicio y total del período',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/ConsumoReporte' } },
+            },
+          },
+          401: { $ref: '#/components/responses/Error401' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+    },
+    '/extras/{id}': {
+      patch: {
+        tags: ['Extras'],
+        summary: 'Modifica un servicio adicional (solo Administrador)',
+        description:
+          'Actualiza solo los campos enviados. El `codigo` se valida como único excluyendo al propio ' +
+          'servicio; un body vacío responde `422` y un id inexistente `404`.',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/ExtraUpdate' } },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Servicio actualizado',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/HotelExtra' } } },
+          },
+          401: { $ref: '#/components/responses/Error401' },
+          403: { $ref: '#/components/responses/Error403' },
+          404: { $ref: '#/components/responses/Error404' },
+          409: { $ref: '#/components/responses/Error409' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+      delete: {
+        tags: ['Extras'],
+        summary: 'Da de baja un servicio adicional (borrado lógico, solo Administrador)',
+        description:
+          'Marca `activo = false` sin borrar la fila. Un servicio inactivo no puede recibir cargos ' +
+          'nuevos y desaparece del catálogo visto por el recepcionista.',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        responses: {
+          200: {
+            description: 'Servicio dado de baja',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/HotelExtra' } } },
+          },
+          401: { $ref: '#/components/responses/Error401' },
+          403: { $ref: '#/components/responses/Error403' },
+          404: { $ref: '#/components/responses/Error404' },
         },
       },
     },
@@ -1731,6 +1936,150 @@ const spec = {
           dia: { type: 'string', description: 'Nombre del día de la semana' },
           tarifa: { type: 'integer' },
           origen: { type: 'string', enum: ['WEEKDAY', 'SEASON', 'BASE'] },
+        },
+      },
+      CategoriaExtra: {
+        type: 'string',
+        enum: ['ALIMENTOS', 'LAVANDERIA', 'TRANSPORTE', 'SERVICIOS', 'OTROS'],
+      },
+      UnidadExtra: {
+        type: 'string',
+        enum: ['NOCHE', 'POR_UNIDAD', 'DIA', 'ESTANCIA'],
+        description:
+          'Informativa: indica qué significa `cantidad` (p. ej. `NOCHE` → noches consumidas). El ' +
+          'importe es siempre `precio × cantidad`.',
+      },
+      EstadoCargo: {
+        type: 'string',
+        enum: ['PENDIENTE', 'CANCELADO'],
+        description: '`PENDIENTE` suma al resumen; `CANCELADO` (anulado) no.',
+      },
+      HotelExtra: {
+        type: 'object',
+        properties: {
+          id: { type: 'integer' },
+          codigo: {
+            type: 'string',
+            pattern: '^[A-Z0-9-]{2,20}$',
+            description: 'Único entre todos los servicios',
+          },
+          nombre: { type: 'string' },
+          categoria: { $ref: '#/components/schemas/CategoriaExtra' },
+          precio: { type: 'integer', minimum: 1, description: 'Precio en la unidad base de la moneda' },
+          unidad: { $ref: '#/components/schemas/UnidadExtra' },
+          activo: {
+            type: 'boolean',
+            default: true,
+            description: 'Por defecto `true`; `DELETE` lo pasa a `false` (borrado lógico)',
+          },
+          descripcion: { type: 'string', nullable: true },
+          creadoEn: { type: 'string', format: 'date-time' },
+        },
+      },
+      ExtraCreate: {
+        type: 'object',
+        required: ['codigo', 'nombre', 'categoria', 'precio', 'unidad'],
+        properties: {
+          codigo: { type: 'string', pattern: '^[A-Z0-9-]{2,20}$' },
+          nombre: { type: 'string' },
+          categoria: { $ref: '#/components/schemas/CategoriaExtra' },
+          precio: { type: 'integer', minimum: 1 },
+          unidad: { $ref: '#/components/schemas/UnidadExtra' },
+          descripcion: { type: 'string', nullable: true },
+        },
+      },
+      ExtraUpdate: {
+        type: 'object',
+        description: 'Todos los campos son opcionales; se envía al menos uno.',
+        properties: {
+          codigo: { type: 'string', pattern: '^[A-Z0-9-]{2,20}$' },
+          nombre: { type: 'string' },
+          categoria: { $ref: '#/components/schemas/CategoriaExtra' },
+          precio: { type: 'integer', minimum: 1 },
+          unidad: { $ref: '#/components/schemas/UnidadExtra' },
+          descripcion: { type: 'string', nullable: true },
+        },
+      },
+      ExtraList: {
+        type: 'object',
+        properties: {
+          data: { type: 'array', items: { $ref: '#/components/schemas/HotelExtra' } },
+          pagination: {
+            type: 'object',
+            properties: {
+              page: { type: 'integer' },
+              pageSize: { type: 'integer' },
+              total: { type: 'integer' },
+            },
+          },
+        },
+      },
+      ChargeCreate: {
+        type: 'object',
+        required: ['extraId', 'cantidad'],
+        properties: {
+          extraId: { type: 'integer', minimum: 1 },
+          cantidad: { type: 'integer', minimum: 1 },
+          nota: { type: 'string', nullable: true },
+        },
+      },
+      Charge: {
+        type: 'object',
+        properties: {
+          id: { type: 'integer' },
+          reservationId: { type: 'integer' },
+          extraId: { type: 'integer' },
+          cantidad: { type: 'integer', minimum: 1 },
+          precioUnitario: {
+            type: 'integer',
+            description: 'Precio congelado del catálogo al registrar el cargo',
+          },
+          importe: { type: 'integer', description: '`precioUnitario × cantidad`' },
+          estado: { $ref: '#/components/schemas/EstadoCargo' },
+          nota: { type: 'string', nullable: true },
+          registradoPorId: { type: 'integer' },
+          anuladoPorId: { type: 'integer', nullable: true },
+          anuladoEn: { type: 'string', format: 'date-time', nullable: true },
+          creadoEn: { type: 'string', format: 'date-time' },
+          extra: { $ref: '#/components/schemas/HotelExtra' },
+        },
+      },
+      ChargeResumen: {
+        type: 'object',
+        properties: {
+          totalEstadia: { type: 'integer', description: 'Costo de la estadía (`Reservation.total`)' },
+          totalServicios: { type: 'integer', description: 'Suma de cargos no anulados' },
+          totalGeneral: { type: 'integer', description: '`totalEstadia + totalServicios`' },
+          cantidadCargos: { type: 'integer' },
+        },
+      },
+      ChargeList: {
+        type: 'object',
+        properties: {
+          data: { type: 'array', items: { $ref: '#/components/schemas/Charge' } },
+          resumen: { $ref: '#/components/schemas/ChargeResumen' },
+        },
+      },
+      ConsumoReporte: {
+        type: 'object',
+        properties: {
+          data: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                extraId: { type: 'integer' },
+                codigo: { type: 'string', nullable: true },
+                nombre: { type: 'string', nullable: true },
+                categoria: { $ref: '#/components/schemas/CategoriaExtra' },
+                cantidad: { type: 'integer' },
+                importe: { type: 'integer' },
+              },
+            },
+          },
+          desde: { type: 'string', format: 'date' },
+          hasta: { type: 'string', format: 'date' },
+          totalPeriodo: { type: 'integer' },
         },
       },
       EstadoHousekeeping: {
