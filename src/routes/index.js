@@ -7,6 +7,7 @@ const roomRoutes = require('./room.routes');
 const rateRoutes = require('./rate.routes');
 const availabilityRoutes = require('./availability.routes');
 const reservationRoutes = require('./reservation.routes');
+const extrasRoutes = require('./extras.routes');
 
 const router = Router();
 
@@ -17,5 +18,6 @@ router.use('/rooms', roomRoutes);
 router.use('/rates', rateRoutes);
 router.use('/availability', availabilityRoutes);
 router.use('/reservations', reservationRoutes);
+router.use('/extras', extrasRoutes);
 
 module.exports = router;

@@ -22,7 +22,8 @@ async function listReservations(req, res, next) {
 
 async function getReservation(req, res, next) {
   try {
-    const reservation = await reservationService.getReservation(req.params.id);
+    const incluirCargos = req.query.incluirCargos === 'true';
+    const reservation = await reservationService.getReservation(req.params.id, { incluirCargos });
     return res.json(reservation);
   } catch (err) {
     return next(err);

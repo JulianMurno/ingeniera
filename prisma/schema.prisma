@@ -8,12 +8,14 @@ datasource db {
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  username  String   @unique
-  password  String
-  rol       String
-  activo    Boolean  @default(true)
-  createdAt DateTime @default(now())
+  id                 Int           @id @default(autoincrement())
+  username           String        @unique
+  password           String
+  rol                String
+  activo             Boolean       @default(true)
+  createdAt          DateTime      @default(now())
+  chargesRegistrados ExtraCharge[] @relation("ChargesRegistrados")
+  chargesAnulados    ExtraCharge[] @relation("ChargesAnulados")
 }
 
 model TokenInvalidado {
@@ -69,6 +71,7 @@ model Reservation {
   createdAt         DateTime @default(now())
   guest             Guest    @relation(fields: [guestId], references: [id])
   room              Room     @relation(fields: [roomId], references: [id])
+  extraCharges      ExtraCharge[]
 
   @@index([roomId, checkIn, checkOut])
   @@index([guestId])
@@ -95,4 +98,40 @@ model WeekdayRate {
   createdAt DateTime @default(now())
 
   @@unique([roomType, diaSemana])
+}
+
+model HotelExtra {
+  id          Int           @id @default(autoincrement())
+  codigo      String        @unique
+  nombre      String
+  categoria   String
+  precio      Int
+  unidad      String
+  activo      Boolean       @default(true)
+  descripcion String?
+  creadoEn    DateTime      @default(now())
+  charges     ExtraCharge[]
+}
+
+model ExtraCharge {
+  id              Int          @id @default(autoincrement())
+  reservationId   Int
+  extraId         Int
+  cantidad        Int
+  precioUnitario  Int
+  importe         Int
+  estado          String       @default("PENDIENTE")
+  nota            String?
+  registradoPorId Int
+  anuladoPorId    Int?
+  anuladoEn       DateTime?
+  creadoEn        DateTime     @default(now())
+  reservation     Reservation  @relation(fields: [reservationId], references: [id])
+  extra           HotelExtra   @relation(fields: [extraId], references: [id])
+  registradoPor   User         @relation("ChargesRegistrados", fields: [registradoPorId], references: [id])
+  anuladoPor      User?        @relation("ChargesAnulados", fields: [anuladoPorId], references: [id])
+
+  @@index([reservationId, estado])
+  @@index([extraId, creadoEn])
+  @@index([estado])
 }

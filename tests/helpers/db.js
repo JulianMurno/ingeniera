@@ -11,7 +11,9 @@ const TEST_PASSWORD = '123456';
 let cachedTokens = {};
 
 async function resetDb() {
+  await prisma.extraCharge.deleteMany();
   await prisma.reservation.deleteMany();
+  await prisma.hotelExtra.deleteMany();
   await prisma.season.deleteMany();
   await prisma.weekdayRate.deleteMany();
   await prisma.room.deleteMany();
