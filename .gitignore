@@ -7,4 +7,3 @@ coverage/
 !.env.example
 prisma/*.db
 prisma/*.db-journal
-.github/
