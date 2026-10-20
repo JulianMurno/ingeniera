@@ -7,18 +7,33 @@ const { getHealth } = require('./controllers/health.controller');
 const { notFound, errorHandler } = require('./middlewares/error.middleware');
 const { serve, setup } = require('./docs');
 
-const app = express();
+// API paths are owned by Express. Everything else is handed to the UI handler
+// (Next.js) when one is provided, so the app is served on a single origin.
+const isApiPath = (path) => path.startsWith('/api') || path === '/health';
 
-app.use(cors());
-app.use(express.json());
+function createApp({ ui } = {}) {
+  const app = express();
 
-app.use('/api/docs', serve, setup);
+  app.use(cors());
+  app.use(express.json());
 
-app.get('/health', getHealth);
+  app.use('/api/docs', serve, setup);
 
-app.use('/api/v1', routes);
+  app.get('/health', getHealth);
 
-app.use(notFound);
-app.use(errorHandler);
+  app.use('/api/v1', routes);
 
-module.exports = app;
+  if (ui) {
+    app.use((req, res, next) => {
+      if (isApiPath(req.path)) return next();
+      return ui(req, res);
+    });
+  }
+
+  app.use(notFound);
+  app.use(errorHandler);
+
+  return app;
+}
+
+module.exports = { createApp };
