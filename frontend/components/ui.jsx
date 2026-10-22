@@ -80,7 +80,7 @@ export function ErrorMsg({ error }) {
         <ul>
           {error.details.map((d, i) => (
             <li key={i}>
-              {d.path ? `${d.path.join('.')}: ` : ''}
+              {d.path ? `${Array.isArray(d.path) ? d.path.join('.') : d.path}: ` : ''}
               {d.message || JSON.stringify(d)}
             </li>
           ))}
