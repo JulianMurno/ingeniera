@@ -46,7 +46,7 @@ export default function Nav() {
             Hotel Reservas
           </Link>
           {pathname !== '/login' && (
-            <Link href="/login" className="btn btn-ghost">
+            <Link href="/login" className="btn btn-primary btn-sm">
               Iniciar sesión
             </Link>
           )}
@@ -66,18 +66,19 @@ export default function Nav() {
             <Link
               key={l.href}
               href={l.href}
-              className={`nav-link ${pathname === l.href ? 'active' : ''}`}
+              className={`nav-link ${pathname === l.href || pathname.startsWith(l.href + '/') ? 'active' : ''}`}
             >
               {l.label}
             </Link>
           ))}
         </nav>
         <div className="nav-user">
-          <span className="muted">
-            {user.username} · {user.rol === 'ADMINISTRADOR' ? 'Admin' : 'Recepcionista'}
-          </span>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+            <span style={{ fontSize: 13, fontWeight: 600 }}>{user.username}</span>
+            <span className="muted" style={{ fontSize: 11 }}>{user.rol === 'ADMINISTRADOR' ? 'Administrador' : 'Recepcionista'}</span>
+          </div>
           <button type="button" className="btn btn-ghost btn-sm" onClick={logout}>
-            Salir
+            Cerrar sesión
           </button>
         </div>
       </div>
