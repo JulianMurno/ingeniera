@@ -4,7 +4,10 @@ const bcrypt = require('bcryptjs');
 const request = require('supertest');
 
 const prisma = require('../../src/lib/prisma');
-const app = require('../../src/app');
+const { createApp } = require('../../src/app');
+
+// API-only app: the UI handler is not mounted under test.
+const app = createApp();
 
 const TEST_PASSWORD = '123456';
 

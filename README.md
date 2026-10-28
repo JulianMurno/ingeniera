@@ -256,19 +256,26 @@ del período por servicio y devuelve `{ data, totalPeriodo }`.
 
 ## Frontend (Next.js)
 
-Panel web en `frontend/` (Next.js App Router, JavaScript) que consume la API de `http://localhost:3000`.
-Servicios adicionales: pantalla **Extras** (catálogo; alta, edición y baja solo `ADMINISTRADOR`),
-pantalla **Consumo** (reporte por período) y, en el detalle de cada reserva, la sección de cargos con
-su resumen (registrar cargo; anular solo `ADMINISTRADOR`).
+Panel web en `src/frontend/` (Next.js App Router, JavaScript), servido por Express **junto con la API
+en un mismo origen**: un solo proceso, un solo puerto. Servicios adicionales: pantalla **Extras**
+(catálogo; alta, edición y baja solo `ADMINISTRADOR`), pantalla **Consumo** (reporte por período) y, en
+el detalle de cada reserva, la sección de cargos con su resumen (registrar cargo; anular solo
+`ADMINISTRADOR`).
 
 ```bash
-cd frontend
 npm install
-npm run dev          # http://localhost:3001
+npm run dev          # http://localhost:3000  → API y panel en el mismo puerto
 ```
 
-Se inicia sesión en `/login` con los usuarios del seed. Next.js redirige `/api/*` y `/health` a la API;
-la URL se cambia con la variable `API_URL`.
+Se inicia sesión en `/login` con los usuarios del seed. Express atiende `/api/*` y `/health`; todo lo
+demás lo maneja Next.js, así que no hay que levantar un segundo servidor ni configurar `API_URL`.
+
+Build y arranque en producción:
+
+```bash
+npm run build        # compila src/frontend
+npm start            # node src/server.js --production
+```
 
 ## Notificaciones
 
