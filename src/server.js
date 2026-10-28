@@ -12,17 +12,23 @@ if (process.argv.includes('--production')) {
 }
 
 const dev = process.env.NODE_ENV !== 'production';
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT) || 3000;
+const HOST = process.env.HOST || '127.0.0.1';
 
 const nextApp = next({ dev, dir: path.join(__dirname, 'frontend') });
 const handle = nextApp.getRequestHandler();
 
 async function main() {
-  await nextApp.prepare();
+  try {
+    await nextApp.prepare();
+  } catch (err) {
+    console.error('Error al preparar Next.js:', err);
+    throw err;
+  }
 
   const app = createApp({ ui: handle });
 
-  app.listen(PORT, () => {
+  app.listen(PORT, HOST, () => {
     console.log(`App disponible en http://localhost:${PORT}`);
     console.log(`API en http://localhost:${PORT}/api/v1`);
     console.log(`Docs Swagger en http://localhost:${PORT}/api/docs`);
