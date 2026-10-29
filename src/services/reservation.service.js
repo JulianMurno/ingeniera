@@ -366,13 +366,49 @@ async function cancelReservation(id, data = {}, actor = null) {
   return reservation;
 }
 
+function guestActorId(actor) {
+  if (!actor || actor.rol !== 'HUESPED' || actor.guestId === undefined || actor.guestId === null) {
+    throw new HttpError(403, 'FORBIDDEN', 'Acceso exclusivo para huéspedes');
+  }
+  return actor.guestId;
+}
+
+async function createGuestReservation(data, actor) {
+  const guestId = guestActorId(actor);
+  if (data.guestId !== undefined && Number(data.guestId) !== guestId) {
+    throw new HttpError(403, 'FORBIDDEN', 'No puede reservar para otro huésped');
+  }
+  return createReservation({ ...data, guestId }, actor);
+}
+
+async function listGuestReservations(guestId, params = {}) {
+  return listReservations({ ...params, guestId });
+}
+
+async function getGuestReservation(guestId, id) {
+  const reservation = await getReservation(id);
+  if (reservation.guestId !== guestId) {
+    throw new HttpError(404, 'NOT_FOUND', 'Reserva no encontrada');
+  }
+  return reservation;
+}
+
+async function cancelGuestReservation(guestId, id, data = {}, actor = null) {
+  await getGuestReservation(guestId, id);
+  return cancelReservation(id, data, actor);
+}
+
 module.exports = {
   checkInReservation,
   checkOutReservation,
   cancelReservation,
   createReservation,
+  createGuestReservation,
   getReservation,
+  getGuestReservation,
   listReservations,
+  listGuestReservations,
+  cancelGuestReservation,
   markNoShow,
   updateReservation,
 };

@@ -1,11 +1,13 @@
 const { Router } = require('express');
 
+const { requireAuth, requireStaff } = require('../middlewares/auth.middleware');
 const authRoutes = require('./auth.routes');
 const userRoutes = require('./user.routes');
 const guestRoutes = require('./guest.routes');
 const roomRoutes = require('./room.routes');
 const rateRoutes = require('./rate.routes');
 const availabilityRoutes = require('./availability.routes');
+const guestPortalRoutes = require('./guest-portal.routes');
 const reservationRoutes = require('./reservation.routes');
 const extrasRoutes = require('./extras.routes');
 const housekeepingRoutes = require('./housekeeping.routes');
@@ -17,17 +19,19 @@ const healthRoutes = require('./health.routes');
 const router = Router();
 
 router.use('/auth', authRoutes);
-router.use('/users', userRoutes);
-router.use('/guests', guestRoutes);
-router.use('/rooms', roomRoutes);
-router.use('/rates', rateRoutes);
-router.use('/availability', availabilityRoutes);
-router.use('/reservations', reservationRoutes);
-router.use('/extras', extrasRoutes);
-router.use('/housekeeping', housekeepingRoutes);
-router.use('/maintenance', maintenanceRoutes);
-router.use('/reports', reportRoutes);
-router.use('/audit', auditRoutes);
 router.use('/health', healthRoutes);
+router.use('/availability', availabilityRoutes);
+router.use('/guest', guestPortalRoutes);
+
+router.use('/users', requireAuth, requireStaff, userRoutes);
+router.use('/guests', requireAuth, requireStaff, guestRoutes);
+router.use('/rooms', requireAuth, requireStaff, roomRoutes);
+router.use('/rates', requireAuth, requireStaff, rateRoutes);
+router.use('/reservations', requireAuth, requireStaff, reservationRoutes);
+router.use('/extras', requireAuth, requireStaff, extrasRoutes);
+router.use('/housekeeping', requireAuth, requireStaff, housekeepingRoutes);
+router.use('/maintenance', requireAuth, requireStaff, maintenanceRoutes);
+router.use('/reports', requireAuth, requireStaff, reportRoutes);
+router.use('/audit', requireAuth, requireStaff, auditRoutes);
 
 module.exports = router;

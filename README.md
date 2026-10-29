@@ -23,7 +23,7 @@ Sistema de reservas de hotel con API REST (Node.js + Express + Prisma + SQLite).
 npm install
 cp .env.example .env          # editar JWT_SECRET y las reglas de disponibilidad
 npx prisma migrate dev
-npx prisma db seed            # crea usuarios admin y recepcionista
+npx prisma db seed            # crea usuarios del personal y un huésped demo
 npm run dev                   # o: npm start
 ```
 
@@ -31,22 +31,34 @@ La API queda en `http://localhost:3000/api/v1` y los docs en `http://localhost:3
 
 ### Usuarios de seed
 
-| Usuario         | Contraseña | Rol           |
-| --------------- | ---------- | ------------- |
-| `admin`         | `123456`   | ADMINISTRADOR |
-| `recepcionista` | `123456`   | RECEPCIONISTA |
+| Usuario / email      | Contraseña   | Rol           |
+| -------------------- | ------------ | ------------- |
+| `admin`              | `123456`     | ADMINISTRADOR |
+| `recepcionista`      | `123456`     | RECEPCIONISTA |
+| `huesped@hotel.local` | `huesped123` | HUESPED       |
 
-> Cambiá `SEED_PASSWORD` en el entorno antes de desplegar.
+El huésped demo tiene DNI `12345678Z` y ficha propia: sirve para probar el portal desde una base
+limpia. `admin` y `recepcionista` inician sesión con `username` en `/auth/login`; el huésped lo hace
+con su email en `/auth/guest/login`.
+
+> Cambiá `SEED_PASSWORD` y `SEED_GUEST_PASSWORD` en el entorno antes de desplegar.
 
 ## Endpoints
 
-Toda ruta protegida requiere `Authorization: Bearer <token>` (obtenido en `POST /auth/login`). La gestión de habitaciones, de usuarios y del catálogo de servicios adicionales exige rol `ADMINISTRADOR`.
+Toda ruta protegida requiere `Authorization: Bearer <token>` (obtenido en `POST /auth/login` para el personal o `POST /auth/guest/login` para huéspedes). Las rutas de gestión (`/users`, `/guests`, `/rooms`, `/reservations`, etc.) solo admiten `ADMINISTRADOR` o `RECEPCIONISTA`; un token `HUESPED` recibe `403`. El portal (`/guest/*`) es exclusivo de `HUESPED`. La gestión de habitaciones, de usuarios y del catálogo de servicios adicionales exige además rol `ADMINISTRADOR`.
 
 | Método | Ruta                               | Descripción                                       | Rol           |
 | ------ | ---------------------------------- | ------------------------------------------------- | ------------- |
 | POST   | `/api/v1/auth/login`               | Inicia sesión y devuelve un JWT                   | público       |
 | POST   | `/api/v1/auth/logout`              | Cierra sesión e invalida el token presentado      | autenticado   |
 | PATCH  | `/api/v1/auth/password`            | Cambia la contraseña propia                      | autenticado   |
+| POST   | `/api/v1/auth/guest/register`      | Registra una cuenta de huésped (reclama su ficha) | público       |
+| POST   | `/api/v1/auth/guest/login`         | Inicia sesión como huésped con email             | público       |
+| GET    | `/api/v1/guest/me`                 | Ficha del huésped autenticado                    | HUESPED       |
+| GET    | `/api/v1/guest/reservations`       | Lista las reservas propias (paginado)            | HUESPED       |
+| POST   | `/api/v1/guest/reservations`       | Crea una reserva propia                          | HUESPED       |
+| GET    | `/api/v1/guest/reservations/{id}`  | Detalle de una reserva propia                    | HUESPED       |
+| POST   | `/api/v1/guest/reservations/{id}/cancel` | Cancela una reserva propia                 | HUESPED       |
 | POST   | `/api/v1/users`                    | Registra un usuario del personal                  | ADMINISTRADOR |
 | GET    | `/api/v1/users`                    | Lista los usuarios del personal                   | autenticado   |
 | PATCH  | `/api/v1/users/{id}`               | Modifica username, rol, contraseña o `activo`     | ADMINISTRADOR |
@@ -68,7 +80,7 @@ Toda ruta protegida requiere `Authorization: Bearer <token>` (obtenido en `POST 
 | GET    | `/api/v1/rates/weekdays?roomType=` | Lista de tarifas por día de la semana             | autenticado   |
 | DELETE | `/api/v1/rates/weekdays/{id}`      | Elimina una tarifa por día de la semana           | ADMINISTRADOR |
 | GET    | `/api/v1/rates/quote`              | Tarifa vigente por tipo y rango (desglose x noche) | autenticado |
-| GET    | `/api/v1/availability`             | Habitaciones disponibles por rango, tipo y ocupantes | autenticado |
+| GET    | `/api/v1/availability`             | Habitaciones disponibles por rango, tipo y ocupantes | autenticado (personal o HUESPED) |
 | POST   | `/api/v1/reservations`             | Crea una reserva (valida disponibilidad, ocupación y fechas) | autenticado   |
 | GET    | `/api/v1/reservations`             | Lista reservas con filtros y paginación           | autenticado   |
 | GET    | `/api/v1/reservations/{id}`        | Detalle de reserva (`?incluirCargos=true` agrega el resumen de cargos) | autenticado   |
@@ -116,6 +128,8 @@ Los tokens JWT se emiten con un `jti` (uuid) único y expiran según `JWT_EXPIRE
 | Método | Ruta               | Rol         | Reglas                                                                  |
 | ------ | ------------------ | ----------- | ----------------------------------------------------------------------- |
 | POST   | `/auth/login`      | público     | Un usuario desactivado responde `401` sin emitir token                  |
+| POST   | `/auth/guest/register` | público | Crea/reclama la ficha y emite un token con rol `HUESPED` y `guestId`    |
+| POST   | `/auth/guest/login`| público     | Autentica solo cuentas `HUESPED` por email; credenciales malas `401`     |
 | POST   | `/auth/logout`     | autenticado | Inserta el `jti` del token en la denylist hasta su expiración           |
 | PATCH  | `/auth/password`   | autenticado | Exige `currentPassword` verificada con bcrypt; si falla, `401`          |
 
@@ -126,6 +140,51 @@ Los tokens JWT se emiten con un `jti` (uuid) único y expiran según `JWT_EXPIRE
   sin límite.
 - `PATCH /auth/password` acepta `currentPassword` y `newPassword` (mínimo 6 caracteres y distinta de
   la actual). La nueva se guarda hasheada con bcrypt.
+
+## Portal de huéspedes (autoservicio)
+
+El huésped puede registrarse, iniciar sesión y gestionar sus reservas sin intervención del
+mostrador. El flujo es:
+
+1. `POST /auth/guest/register` con `nombre`, `email`, `dni`, `password` (mínimo 8 caracteres) y
+   `telefono` opcional. El email se normaliza a minúsculas y el DNI a mayúsculas.
+2. Si ya existe una ficha con el **mismo DNI y email**, se reclama y se asocia la cuenta; si no
+   existe, se crea una ficha nueva. Una coincidencia parcial responde `409`:
+   - DNI de una ficha con otro email, o email de una ficha con otro DNI.
+   - Ficha archivada o ficha que ya tiene una cuenta.
+   - Email que ya está en uso como `username` de otra cuenta.
+3. El registro devuelve `{ token, user }`; el token incluye `rol: "HUESPED"` y `guestId`. En los
+   siguientes requests se usa `Authorization: Bearer <token>`.
+4. `POST /auth/guest/login` autentica con `email` + `password` (no con `username`).
+
+| Método | Ruta                                | Reglas                                                                 |
+| ------ | ----------------------------------- | ---------------------------------------------------------------------- |
+| GET    | `/guest/me`                         | Devuelve la ficha asociada al `guestId` del token                      |
+| GET    | `/guest/reservations`               | Solo reservas propias; `page` / `pageSize` (por defecto `1` / `10`)    |
+| POST   | `/guest/reservations`               | Crea una reserva propia; el `guestId` sale del token                   |
+| GET    | `/guest/reservations/{id}`          | Una reserva ajena responde `404`                                       |
+| POST   | `/guest/reservations/{id}/cancel`   | Solo reservas propias en `CONFIRMADA`; motivo opcional                |
+
+Las reservas del portal usan el mismo motor que el mostrador: validan disponibilidad, ocupación,
+tarifas, antelación y estancia, nacen en `CONFIRMADA` con su `codigo` y envían el email de
+confirmación. El huésped puede consultar `GET /availability` para buscar habitaciones.
+
+**Aislamiento de roles:** las rutas de gestión (`/users`, `/guests`, `/rooms`, `/rates`,
+`/reservations`, `/extras`, `/housekeeping`, `/maintenance`, `/reports`, `/audit`) rechazan un token
+`HUESPED` con `403`; las rutas `/guest/*` rechazan al personal con `403`. En el cuerpo de creación,
+un `guestId` distinto del token responde `403` (el servicio siempre inyecta el del token).
+
+Ejemplo reproducible con la base sembrada:
+
+```bash
+curl -s -X POST http://localhost:3000/api/v1/auth/guest/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"huesped@hotel.local","password":"huesped123"}'
+```
+
+En el frontend, el portal vive en `/portal` (búsqueda de disponibilidad), `/portal/login`,
+`/portal/registro`, `/portal/reservar` y `/portal/mis-reservas`. El login del personal sigue en
+`/login`.
 
 ## Usuarios del personal
 
@@ -267,8 +326,10 @@ npm install
 npm run dev          # http://localhost:3001
 ```
 
-Se inicia sesión en `/login` con los usuarios del seed. Next.js redirige `/api/*` y `/health` a la API;
-la URL se cambia con la variable `API_URL`.
+El personal inicia sesión en `/login` y el huésped en `/portal/login` (o se registra en
+`/portal/registro`). El portal permite buscar disponibilidad, reservar y consultar/cancelar las
+reservas propias. Next.js redirige `/api/*` y `/health` a la API; la URL se cambia con la variable
+`API_URL`.
 
 ## Notificaciones
 

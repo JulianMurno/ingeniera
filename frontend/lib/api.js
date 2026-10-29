@@ -30,6 +30,11 @@ export function isAdmin() {
   return !!user && user.rol === 'ADMINISTRADOR';
 }
 
+export function isGuest() {
+  const user = getSessionUser();
+  return !!user && user.rol === 'HUESPED';
+}
+
 function parseError(status, data) {
   const err = new Error(data?.error?.message || `Error ${status}`);
   err.status = status;
@@ -62,9 +67,11 @@ export async function api(path, { method = 'GET', body, auth = true, headers = {
   }
 
   if (res.status === 401 && auth) {
+    const user = getSessionUser();
+    const loginPath = user?.rol === 'HUESPED' ? '/portal/login' : '/login';
     clearSession();
-    if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
-      window.location.href = '/login';
+    if (typeof window !== 'undefined' && window.location.pathname !== loginPath) {
+      window.location.href = loginPath;
     }
   }
 
