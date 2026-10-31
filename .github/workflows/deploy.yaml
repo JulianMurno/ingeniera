@@ -38,8 +38,7 @@ jobs:
             cd ~/ingeniera
             git pull --ff-only origin main
             npm ci
+            npx prisma generate
             npx prisma migrate deploy
-            cd frontend
-            npm ci
             npm run build
-            pm2 restart all
+            pm2 restart backend
