@@ -19,6 +19,36 @@ async function main() {
     create: { username: 'recepcionista', password, rol: 'RECEPCIONISTA', activo: true },
   });
 
+  const guestEmail = 'huesped@hotel.local';
+  const guestPassword = bcrypt.hashSync(process.env.SEED_GUEST_PASSWORD || 'huesped123', 10);
+  const guest = await prisma.guest.upsert({
+    where: { dni: '12345678Z' },
+    update: {
+      nombre: 'Huésped Demo',
+      email: guestEmail,
+      telefono: '600111222',
+      activo: true,
+    },
+    create: {
+      nombre: 'Huésped Demo',
+      email: guestEmail,
+      dni: '12345678Z',
+      telefono: '600111222',
+    },
+  });
+
+  await prisma.user.upsert({
+    where: { username: guestEmail },
+    update: { password: guestPassword, rol: 'HUESPED', activo: true, guestId: guest.id },
+    create: {
+      username: guestEmail,
+      password: guestPassword,
+      rol: 'HUESPED',
+      activo: true,
+      guestId: guest.id,
+    },
+  });
+
   const catalogo = [
     {
       codigo: 'ROOM-SERVICE',
@@ -77,6 +107,7 @@ async function main() {
   }
 
   console.log('Usuarios sembrados: admin (ADMINISTRADOR) y recepcionista (RECEPCIONISTA)');
+  console.log(`Huésped sembrado: ${guestEmail} (HUESPED, DNI 12345678Z)`);
   console.log(`Catálogo de servicios sembrado: ${catalogo.length} extras`);
 }
 

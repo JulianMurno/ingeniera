@@ -21,7 +21,18 @@ const spec = {
         'Los tokens JWT se emiten con expiración configurable por `JWT_EXPIRES_IN` (por defecto ' +
         '`8h`) e incluyen un `jti` único. `POST /auth/logout` invalida el token presentado ' +
         '(denylist por `jti`): a partir de ese momento el mismo token responde `401` aunque no ' +
-        'haya vencido. Los usuarios desactivados no pueden iniciar sesión.',
+        'haya vencido. Los usuarios desactivados no pueden iniciar sesión. Los huéspedes se ' +
+        'autentican con `POST /auth/guest/login` usando su email; su token incluye el rol ' +
+        '`HUESPED` y el `guestId` de su ficha.',
+    },
+    {
+      name: 'Portal de huéspedes',
+      description:
+        'Autoservicio del huésped: registro, consulta de su ficha, disponibilidad y gestión de sus ' +
+        'propias reservas. Todas las rutas `/guest/*` exigen un token con rol `HUESPED`; un token ' +
+        'del personal responde `403`. Las reservas se crean directamente en `CONFIRMADA` con el ' +
+        'mismo motor de disponibilidad, tarifas y ocupación que el mostrador, y solo se pueden ' +
+        'consultar o cancelar las propias (las ajenas responden `404`).',
     },
     {
       name: 'Usuarios',
@@ -179,6 +190,211 @@ const spec = {
           },
           401: { $ref: '#/components/responses/Error401' },
           404: { $ref: '#/components/responses/Error404' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+    },
+    '/auth/guest/register': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Registra una cuenta de huésped y devuelve un token',
+        description:
+          'Normaliza el email a minúsculas y el DNI a mayúsculas. Si existe una ficha con el ' +
+          'mismo DNI y email, la reclama y asocia la cuenta. Responde `409` si el email ya tiene ' +
+          'cuenta, si el DNI pertenece a otra ficha o a un huésped archivado, si el email ya ' +
+          'existe con otro DNI, o si la ficha ya tiene una cuenta. La contraseña requiere al ' +
+          'menos 8 caracteres y el token resultante incluye el rol `HUESPED` y el `guestId`.',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/GuestRegisterRequest' },
+            },
+          },
+        },
+        responses: {
+          201: {
+            description: 'Cuenta de huésped creada y token emitido',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/GuestSessionResponse' },
+              },
+            },
+          },
+          409: { $ref: '#/components/responses/Error409' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+    },
+    '/auth/guest/login': {
+      post: {
+        tags: ['Auth'],
+        summary: 'Inicia sesión como huésped con email y contraseña',
+        description:
+          'Solo autentica cuentas con rol `HUESPED`. Credenciales incorrectas o una cuenta ' +
+          'desactivada responden `401` sin emitir token.',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/GuestLoginRequest' },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Token emitido',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/GuestSessionResponse' },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Error401' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+    },
+    '/guest/me': {
+      get: {
+        tags: ['Portal de huéspedes'],
+        summary: 'Devuelve la ficha del huésped autenticado',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: 'Ficha del huésped',
+            content: { 'application/json': { schema: { $ref: '#/components/schemas/Guest' } } },
+          },
+          401: { $ref: '#/components/responses/Error401' },
+          403: { $ref: '#/components/responses/Error403' },
+        },
+      },
+    },
+    '/guest/reservations': {
+      get: {
+        tags: ['Portal de huéspedes'],
+        summary: 'Lista las reservas del huésped autenticado',
+        description:
+          'El `guestId` se toma siempre del token: cualquier filtro `guestId` de la query se ' +
+          'ignora. Admite paginación.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+          {
+            name: 'pageSize',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 100, default: 10 },
+          },
+        ],
+        responses: {
+          200: {
+            description: 'Reservas propias paginadas',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    data: {
+                      type: 'array',
+                      items: { $ref: '#/components/schemas/Reservation' },
+                    },
+                    pagination: {
+                      type: 'object',
+                      properties: {
+                        page: { type: 'integer' },
+                        pageSize: { type: 'integer' },
+                        total: { type: 'integer' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          401: { $ref: '#/components/responses/Error401' },
+          403: { $ref: '#/components/responses/Error403' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+      post: {
+        tags: ['Portal de huéspedes'],
+        summary: 'Crea una reserva a nombre del huésped autenticado',
+        description:
+          'El `guestId` se toma del token y se inyecta en la reserva; si el cuerpo envía uno ' +
+          'distinto responde `403`. Aplica las mismas validaciones que el mostrador: `409` por ' +
+          'mantenimiento o sobreocupación, `422` por fechas, antelación u ocupantes. La reserva ' +
+          'nace `CONFIRMADA` con su `codigo` y dispara el email de confirmación.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: { $ref: '#/components/schemas/GuestReservationCreate' },
+            },
+          },
+        },
+        responses: {
+          201: {
+            description: 'Reserva creada',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/Reservation' } },
+            },
+          },
+          401: { $ref: '#/components/responses/Error401' },
+          403: { $ref: '#/components/responses/Error403' },
+          409: { $ref: '#/components/responses/Error409' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+    },
+    '/guest/reservations/{id}': {
+      get: {
+        tags: ['Portal de huéspedes'],
+        summary: 'Obtiene una reserva propia',
+        description:
+          'Si la reserva pertenece a otro huésped responde `404` para no revelar su existencia.',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        responses: {
+          200: {
+            description: 'Reserva encontrada',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/Reservation' } },
+            },
+          },
+          401: { $ref: '#/components/responses/Error401' },
+          403: { $ref: '#/components/responses/Error403' },
+          404: { $ref: '#/components/responses/Error404' },
+        },
+      },
+    },
+    '/guest/reservations/{id}/cancel': {
+      post: {
+        tags: ['Portal de huéspedes'],
+        summary: 'Cancela una reserva propia',
+        description:
+          'Solo admite reservas propias en estado `CONFIRMADA`; las ajenas responden `404` y las ' +
+          'que no se pueden cancelar `409`. Guarda el motivo, calcula la multa y envía el email ' +
+          'de cancelación.',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+        requestBody: {
+          required: false,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/ReservationCancel' } },
+          },
+        },
+        responses: {
+          200: {
+            description: 'Reserva cancelada',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/Reservation' } },
+            },
+          },
+          401: { $ref: '#/components/responses/Error401' },
+          403: { $ref: '#/components/responses/Error403' },
+          404: { $ref: '#/components/responses/Error404' },
+          409: { $ref: '#/components/responses/Error409' },
           422: { $ref: '#/components/responses/Error422' },
         },
       },
@@ -1532,11 +1748,70 @@ const spec = {
               id: { type: 'integer' },
               username: { type: 'string' },
               rol: { $ref: '#/components/schemas/Rol' },
+              guestId: {
+                type: 'integer',
+                nullable: true,
+                description: 'Ficha asociada cuando el usuario es un huésped; `null` para el personal',
+              },
+              nombre: {
+                type: 'string',
+                description: 'Nombre de la ficha; solo se incluye en cuentas de huésped',
+              },
             },
           },
         },
       },
-      Rol: { type: 'string', enum: ['RECEPCIONISTA', 'ADMINISTRADOR'] },
+      GuestRegisterRequest: {
+        type: 'object',
+        required: ['nombre', 'email', 'dni', 'password'],
+        properties: {
+          nombre: { type: 'string', minLength: 1 },
+          email: { type: 'string', format: 'email' },
+          dni: {
+            type: 'string',
+            pattern: '^[A-Za-z0-9]{6,10}$',
+            description: 'Se normaliza a mayúsculas',
+          },
+          telefono: {
+            type: 'string',
+            pattern: '^\\+?\\d{7,15}$',
+            description: 'Opcional; entre 7 y 15 dígitos, con `+` inicial opcional',
+          },
+          password: { type: 'string', format: 'password', minLength: 8 },
+        },
+      },
+      GuestLoginRequest: {
+        type: 'object',
+        required: ['email', 'password'],
+        properties: {
+          email: { type: 'string', format: 'email' },
+          password: { type: 'string', format: 'password' },
+        },
+      },
+      GuestSessionResponse: {
+        type: 'object',
+        properties: {
+          token: { type: 'string' },
+          user: {
+            type: 'object',
+            properties: {
+              id: { type: 'integer' },
+              username: { type: 'string', description: 'Email normalizado del huésped' },
+              rol: { type: 'string', enum: ['HUESPED'] },
+              activo: { type: 'boolean' },
+              guestId: { type: 'integer' },
+              nombre: { type: 'string' },
+            },
+          },
+        },
+      },
+      Rol: {
+        type: 'string',
+        enum: ['RECEPCIONISTA', 'ADMINISTRADOR', 'HUESPED'],
+        description:
+          '`HUESPED` solo accede a `/guest/*`; `RECEPCIONISTA` y `ADMINISTRADOR` acceden a la ' +
+          'gestión del hotel.',
+      },
       User: {
         type: 'object',
         description: 'Usuario del personal. La contraseña nunca se devuelve.',
@@ -1547,6 +1822,11 @@ const spec = {
             description: 'Único entre todos los usuarios, incluidos los desactivados',
           },
           rol: { $ref: '#/components/schemas/Rol' },
+          guestId: {
+            type: 'integer',
+            nullable: true,
+            description: 'Ficha de huésped asociada; `null` para el personal',
+          },
           activo: {
             type: 'boolean',
             description: 'Por defecto `true`; `DELETE` lo pasa a `false` (borrado lógico)',
@@ -1819,6 +2099,26 @@ const spec = {
             description:
               'No puede estar en el pasado y debe respetar `MIN_ADVANCE_NIGHTS`; de lo contrario `422`',
           },
+          checkOut: { type: 'string', format: 'date' },
+          adultos: { type: 'integer', minimum: 1, default: 1 },
+          menores: { type: 'integer', minimum: 0, default: 0 },
+          notas: { type: 'string', nullable: true },
+          earlyCheckIn: { $ref: '#/components/schemas/EarlyCheckIn' },
+          lateCheckOut: { $ref: '#/components/schemas/LateCheckOut' },
+        },
+      },
+      GuestReservationCreate: {
+        type: 'object',
+        required: ['roomId', 'checkIn', 'checkOut'],
+        properties: {
+          guestId: {
+            type: 'integer',
+            description:
+              'Opcional y solo por compatibilidad: si se envía debe coincidir con el `guestId` ' +
+              'del token; en caso contrario responde `403`',
+          },
+          roomId: { type: 'integer' },
+          checkIn: { type: 'string', format: 'date' },
           checkOut: { type: 'string', format: 'date' },
           adultos: { type: 'integer', minimum: 1, default: 1 },
           menores: { type: 'integer', minimum: 0, default: 0 },

@@ -2,9 +2,9 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { api, clearSession, getSessionUser, isAdmin } from '@/lib/api';
+import { api, clearSession, getSessionUser, isAdmin, isGuest } from '@/lib/api';
 
-const LINKS = [
+const STAFF_LINKS = [
   { href: '/', label: 'Panel' },
   { href: '/reservas', label: 'Reservas' },
   { href: '/huespedes', label: 'Huéspedes' },
@@ -21,12 +21,22 @@ const LINKS = [
   { href: '/salud', label: 'Salud' },
 ];
 
+const GUEST_LINKS = [
+  { href: '/portal', label: 'Inicio' },
+  { href: '/portal/reservar', label: 'Reservar' },
+  { href: '/portal/mis-reservas', label: 'Mis reservas' },
+];
+
 export default function Nav() {
   const pathname = usePathname();
   const router = useRouter();
   const user = getSessionUser();
   const admin = isAdmin();
-  const links = LINKS.filter((l) => !l.admin || admin);
+  const guest = isGuest();
+
+  function isActive(href) {
+    return pathname === href || (href !== '/' && pathname.startsWith(`${href}/`));
+  }
 
   async function logout() {
     try {
@@ -35,25 +45,69 @@ export default function Nav() {
       /* la sesión se limpia igual */
     }
     clearSession();
-    router.push('/login');
+    router.push(guest ? '/portal/login' : '/login');
   }
 
   if (!user) {
+    const onPortal = pathname.startsWith('/portal');
     return (
       <header className="topbar">
         <div className="container topbar-inner">
-          <Link href="/login" className="brand">
+          <Link href={onPortal ? '/portal/login' : '/login'} className="brand">
             Hotel Reservas
           </Link>
-          {pathname !== '/login' && (
-            <Link href="/login" className="btn btn-primary btn-sm">
-              Iniciar sesión
+          <nav className="nav">
+            <Link href="/portal/login" className={`nav-link ${onPortal ? 'active' : ''}`}>
+              Portal de huéspedes
             </Link>
-          )}
+            <Link href="/login" className={`nav-link ${!onPortal ? 'active' : ''}`}>
+              Acceso personal
+            </Link>
+          </nav>
         </div>
       </header>
     );
   }
+
+  if (guest) {
+    return (
+      <header className="topbar">
+        <div className="container topbar-inner">
+          <Link href="/portal" className="brand">
+            Hotel Reservas
+          </Link>
+          <nav className="nav">
+            {GUEST_LINKS.map((l) => (
+              <Link
+                key={l.href}
+                href={l.href}
+                className={`nav-link ${isActive(l.href) ? 'active' : ''}`}
+              >
+                {l.label}
+              </Link>
+            ))}
+          </nav>
+          <div className="nav-user">
+            <div
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}
+            >
+              <span style={{ fontSize: 13, fontWeight: 600 }}>
+                {user.nombre || user.username}
+              </span>
+              <span className="muted" style={{ fontSize: 11 }}>
+                Huésped
+              </span>
+            </div>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={logout}>
+              Cerrar sesión
+            </button>
+          </div>
+        </div>
+      </header>
+    );
+  }
+
+  const links = STAFF_LINKS.filter((l) => !l.admin || admin);
 
   return (
     <header className="topbar">
@@ -66,7 +120,7 @@ export default function Nav() {
             <Link
               key={l.href}
               href={l.href}
-              className={`nav-link ${pathname === l.href || pathname.startsWith(l.href + '/') ? 'active' : ''}`}
+              className={`nav-link ${isActive(l.href) ? 'active' : ''}`}
             >
               {l.label}
             </Link>
@@ -75,7 +129,9 @@ export default function Nav() {
         <div className="nav-user">
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
             <span style={{ fontSize: 13, fontWeight: 600 }}>{user.username}</span>
-            <span className="muted" style={{ fontSize: 11 }}>{user.rol === 'ADMINISTRADOR' ? 'Administrador' : 'Recepcionista'}</span>
+            <span className="muted" style={{ fontSize: 11 }}>
+              {user.rol === 'ADMINISTRADOR' ? 'Administrador' : 'Recepcionista'}
+            </span>
           </div>
           <button type="button" className="btn btn-ghost btn-sm" onClick={logout}>
             Cerrar sesión
