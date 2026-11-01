@@ -21,6 +21,13 @@ async function getGuest(id) {
   return guest;
 }
 
+async function getOwnGuest(guestId) {
+  if (guestId === undefined || guestId === null) {
+    throw new HttpError(403, 'FORBIDDEN', 'Acceso exclusivo para huéspedes');
+  }
+  return getGuest(guestId);
+}
+
 async function updateGuest(id, data) {
   await getGuest(id);
   if (data.dni !== undefined) {
@@ -37,4 +44,4 @@ async function deleteGuest(id) {
   return guestRepo.archive(id);
 }
 
-module.exports = { createGuest, listGuests, getGuest, updateGuest, deleteGuest };
+module.exports = { createGuest, listGuests, getGuest, getOwnGuest, updateGuest, deleteGuest };

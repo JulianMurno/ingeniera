@@ -1,11 +1,21 @@
 const prisma = require('../lib/prisma');
 
-function create(data) {
-  return prisma.guest.create({ data });
+function create(data, tx) {
+  const client = tx || prisma;
+  return client.guest.create({ data });
 }
 
-function findByDni(dni) {
-  return prisma.guest.findUnique({ where: { dni } });
+function findByDni(dni, tx) {
+  const client = tx || prisma;
+  return client.guest.findUnique({ where: { dni }, include: { accounts: true } });
+}
+
+function findByEmail(email, tx) {
+  const client = tx || prisma;
+  return client.guest.findFirst({
+    where: { email: email.toLowerCase(), activo: true },
+    include: { accounts: true },
+  });
 }
 
 function findByDniExcluding(dni, excludeId) {
@@ -52,6 +62,7 @@ module.exports = {
   create,
   findByDni,
   findByDniExcluding,
+  findByEmail,
   findById,
   findActiveById,
   findMany,

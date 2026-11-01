@@ -10,6 +10,7 @@ const { createApp } = require('../../src/app');
 const app = createApp();
 
 const TEST_PASSWORD = '123456';
+const GUEST_PASSWORD = 'huesped123';
 
 let cachedTokens = {};
 
@@ -24,9 +25,9 @@ async function resetDb() {
   await prisma.season.deleteMany();
   await prisma.weekdayRate.deleteMany();
   await prisma.room.deleteMany();
-  await prisma.guest.deleteMany();
   await prisma.tokenInvalidado.deleteMany();
   await prisma.user.deleteMany();
+  await prisma.guest.deleteMany();
 
   const password = bcrypt.hashSync(TEST_PASSWORD, 10);
   await prisma.user.createMany({
@@ -63,6 +64,22 @@ async function tokenFor(username) {
 
 function authHeader(username) {
   return tokenFor(username).then((token) => `Bearer ${token}`);
+}
+
+async function registerGuest(overrides = {}) {
+  const data = {
+    nombre: 'Huésped de Prueba',
+    email: 'huesped@example.com',
+    dni: '30000001',
+    password: GUEST_PASSWORD,
+    ...overrides,
+  };
+  const res = await request(app).post('/api/v1/auth/guest/register').send(data);
+  if (res.status !== 201) {
+    throw new Error(`Registro de huésped de test falló: ${res.status} ${JSON.stringify(res.body)}`);
+  }
+  const guest = await prisma.guest.findUnique({ where: { dni: data.dni } });
+  return { ...res.body, guest, email: data.email, dni: data.dni, password: data.password };
 }
 
 function withEnv(values, run) {
@@ -110,6 +127,8 @@ module.exports = {
   tokenFor,
   freshTokenFor,
   authHeader,
+  registerGuest,
   TEST_PASSWORD,
+  GUEST_PASSWORD,
   withEnv,
 };

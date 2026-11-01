@@ -28,6 +28,9 @@ async function requireAuth(req, res, next) {
   }
 
   req.user = { id: payload.sub, username: payload.username, rol: payload.rol };
+  if (payload.guestId !== undefined && payload.guestId !== null) {
+    req.user.guestId = payload.guestId;
+  }
   req.token = { jti: payload.jti, exp: payload.exp };
   return next();
 }
@@ -41,4 +44,13 @@ function authorize(...roles) {
   };
 }
 
-module.exports = { requireAuth, authorize, JWT_SECRET };
+function requireGuest(req, res, next) {
+  if (!req.user || req.user.rol !== 'HUESPED' || req.user.guestId === undefined) {
+    return next(new HttpError(403, 'FORBIDDEN', 'Acceso exclusivo para huéspedes'));
+  }
+  return next();
+}
+
+const requireStaff = authorize('ADMINISTRADOR', 'RECEPCIONISTA');
+
+module.exports = { requireAuth, authorize, requireGuest, requireStaff, JWT_SECRET };

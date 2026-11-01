@@ -13,7 +13,9 @@ model User {
   password                  String
   rol                       String
   activo                    Boolean             @default(true)
+  guestId                   Int?                @unique
   createdAt                 DateTime            @default(now())
+  guest                     Guest?              @relation(fields: [guestId], references: [id])
   housekeepingTasksAsignado HousekeepingTask[]  @relation("HousekeepingTaskAsignadoA")
   maintenanceReportado      MaintenanceTicket[] @relation("MaintenanceTicketReportadoPor")
   maintenanceAsignado       MaintenanceTicket[] @relation("MaintenanceTicketAsignadoA")
@@ -39,6 +41,7 @@ model Guest {
   activo       Boolean       @default(true)
   createdAt    DateTime      @default(now())
   reservations Reservation[]
+  accounts     User[]
 }
 
 model Room {
