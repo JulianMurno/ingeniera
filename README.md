@@ -315,21 +315,24 @@ del período por servicio y devuelve `{ data, totalPeriodo }`.
 
 ## Frontend (Next.js)
 
-Panel web en `src/frontend/` (Next.js App Router, JavaScript), servido por Express **junto con la API
-en un mismo origen**: un solo proceso, un solo puerto. Servicios adicionales: pantalla **Extras**
-(catálogo; alta, edición y baja solo `ADMINISTRADOR`), pantalla **Consumo** (reporte por período) y, en
-el detalle de cada reserva, la sección de cargos con su resumen (registrar cargo; anular solo
-`ADMINISTRADOR`).
+Sitio web en `src/frontend/` (Next.js App Router, JavaScript), servido por Express **junto con la API
+en un mismo origen**: un solo proceso, un solo puerto. El sitio público vive en `/` (landing de
+Mirador del Sol, con tema claro/oscuro), el panel de gestión del personal en `/panel` y el portal de
+huéspedes en `/portal`. Servicios adicionales del panel: pantalla **Extras** (catálogo; alta, edición
+y baja solo `ADMINISTRADOR`), pantalla **Consumo** (reporte por período) y, en el detalle de cada
+reserva, la sección de cargos con su resumen (registrar cargo; anular solo `ADMINISTRADOR`).
 
 ```bash
 npm install
 npm run dev          # http://localhost:3000  → API y panel en el mismo puerto
 ```
 
-El personal inicia sesión en `/login` y el huésped en `/portal/login` (o se registra en
-`/portal/registro`). El portal permite buscar disponibilidad, reservar y consultar/cancelar las
-reservas propias. Express atiende `/api/*` y `/health`; todo lo demás lo maneja Next.js, así que no
-hay que levantar un segundo servidor ni configurar `API_URL`.
+El landing público de `/` presenta la propuesta del hotel y sus CTAs llevan a reservar en `/portal` o
+a identificarse en `/portal/login`. El personal inicia sesión en `/login` y, al entrar, pasa al panel
+en `/panel`; el huésped usa `/portal/login` (o se registra en `/portal/registro`). El portal permite
+buscar disponibilidad, reservar y consultar/cancelar las reservas propias. Express atiende `/api/*` y
+`/health`; todo lo demás lo maneja Next.js, así que no hay que levantar un segundo servidor ni
+configurar `API_URL`.
 
 Build y arranque en producción:
 

@@ -15,7 +15,7 @@ export default function RequireGuest({ children }) {
       return;
     }
     if (user.rol !== 'HUESPED') {
-      router.replace('/');
+      router.replace('/panel');
       return;
     }
     setReady(true);

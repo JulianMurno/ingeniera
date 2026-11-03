@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { api, clearSession, getSessionUser, isAdmin, isGuest } from '@/lib/api';
 
 const STAFF_LINKS = [
-  { href: '/', label: 'Panel' },
+  { href: '/panel', label: 'Panel' },
   { href: '/reservas', label: 'Reservas' },
   { href: '/huespedes', label: 'Huéspedes' },
   { href: '/habitaciones', label: 'Habitaciones' },
@@ -54,7 +54,7 @@ export default function Nav() {
       <header className="topbar">
         <div className="container topbar-inner">
           <Link href={onPortal ? '/portal/login' : '/login'} className="brand">
-            Hotel Reservas
+            Mirador del Sol
           </Link>
           <nav className="nav">
             <Link href="/portal/login" className={`nav-link ${onPortal ? 'active' : ''}`}>
@@ -74,7 +74,7 @@ export default function Nav() {
       <header className="topbar">
         <div className="container topbar-inner">
           <Link href="/portal" className="brand">
-            Hotel Reservas
+            Mirador del Sol
           </Link>
           <nav className="nav">
             {GUEST_LINKS.map((l) => (
@@ -112,8 +112,8 @@ export default function Nav() {
   return (
     <header className="topbar">
       <div className="container topbar-inner">
-        <Link href="/" className="brand">
-          Hotel Reservas
+        <Link href="/panel" className="brand">
+          Mirador del Sol
         </Link>
         <nav className="nav">
           {links.map((l) => (

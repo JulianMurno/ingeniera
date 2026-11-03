@@ -23,7 +23,7 @@ export default function LoginPage() {
         auth: false,
       });
       setSession(token, user);
-      router.push('/');
+      router.push('/panel');
     } catch (err) {
       setError(err);
     } finally {
@@ -33,7 +33,7 @@ export default function LoginPage() {
 
   return (
     <div className="login-wrap">
-      <h1 className="login-title">Hotel Reservas</h1>
+      <h1 className="login-title">Mirador del Sol</h1>
       <div className="card" style={{ boxShadow: 'var(--shadow-lg)' }}>
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <h2 style={{ fontSize: 20, marginBottom: 8 }}>Iniciar Sesión</h2>
