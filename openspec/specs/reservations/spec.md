@@ -212,3 +212,37 @@ El sistema SHALL permitir que un huésped cancele una reserva propia en estado `
 #### Scenario: Cancelación de una reserva en estado no cancelable
 - **WHEN** un huésped intenta cancelar una reserva propia que ya está `CANCELADA`, `FINALIZADA` o `NO_SHOW`
 - **THEN** el sistema responde `409` y no cambia su estado
+
+### Requirement: Check-in condicionado a la limpieza de la habitación
+El sistema SHALL permitir deshabilitar el registro del check-in de una reserva cuya habitación no esté limpia cuando la configuración de bloqueo de limpieza esté activa, respondiendo `409` con un código que identifique el motivo.
+
+#### Scenario: Check-in bloqueado por habitación no limpia
+- **WHEN** la configuración de bloqueo está activa y se registra el check-in de una reserva cuya habitación tiene estado de limpieza distinto de `LIMPIA`
+- **THEN** el sistema responde `409` con el código de habitación no limpia y la reserva permanece en `CONFIRMADA`
+
+#### Scenario: Check-in de habitación limpia
+- **WHEN** la configuración de bloqueo está activa y la habitación de la reserva está en estado de limpieza `LIMPIA`
+- **THEN** el sistema registra el check-in y pasa la reserva a `EN_CURSO`
+
+#### Scenario: Regla desactivada
+- **WHEN** la configuración de bloqueo está desactivada
+- **THEN** el sistema registra el check-in de la reserva sin evaluar el estado de limpieza de la habitación
+
+### Requirement: Consulta y anulación de cargos de la reserva
+El sistema SHALL exponer los cargos de servicios adicionales registrados contra una reserva, permitir anularlos a un usuario con rol `ADMINISTRADOR` y devolver `404` cuando la reserva o el cargo no existan.
+
+#### Scenario: Consulta de cargos
+- **WHEN** un usuario autenticado consulta los cargos de una reserva existente
+- **THEN** el sistema responde `200` con los cargos de la reserva
+
+#### Scenario: Anulación de un cargo
+- **WHEN** un usuario con rol `ADMINISTRADOR` anula un cargo de una reserva
+- **THEN** el sistema lo marca como cancelado y deja constancia del autor y la fecha
+
+#### Scenario: Acceso denegado a recepcionista
+- **WHEN** un usuario con rol `RECEPCIONISTA` intenta anular un cargo
+- **THEN** el sistema responde `403` y el cargo conserva su estado
+
+#### Scenario: Reserva o cargo inexistente
+- **WHEN** se consulta o anula un cargo de una reserva o de un cargo cuyo id no existe
+- **THEN** el sistema responde `404`
