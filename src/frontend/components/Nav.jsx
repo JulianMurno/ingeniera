@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { api, clearSession, getSessionUser } from '@/lib/api';
+import { Leaf } from '@/components/landing/icons';
 
 const STAFF_LINKS = [
   { href: '/panel', label: 'Panel' },
@@ -60,7 +61,13 @@ export default function Nav() {
       <header className="topbar">
         <div className="container topbar-inner">
           <Link href={onPortal ? '/portal/login' : '/login'} className="brand">
-            Mirador del Sol
+            <span className="brand-mark" aria-hidden="true">
+              <Leaf />
+            </span>
+            <span className="brand-copy">
+              <span className="brand-name">Mirador del Sol</span>
+              <span className="brand-note">Sierras de Córdoba · Argentina</span>
+            </span>
           </Link>
           <nav className="nav">
             <Link href="/portal/login" className={`nav-link ${onPortal ? 'active' : ''}`}>
@@ -80,7 +87,13 @@ export default function Nav() {
       <header className="topbar">
         <div className="container topbar-inner">
           <Link href="/portal" className="brand">
-            Mirador del Sol
+            <span className="brand-mark" aria-hidden="true">
+              <Leaf />
+            </span>
+            <span className="brand-copy">
+              <span className="brand-name">Mirador del Sol</span>
+              <span className="brand-note">Sierras de Córdoba · Argentina</span>
+            </span>
           </Link>
           <nav className="nav">
             {GUEST_LINKS.map((l) => (
@@ -94,13 +107,9 @@ export default function Nav() {
             ))}
           </nav>
           <div className="nav-user">
-            <div
-              style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}
-            >
-              <span style={{ fontSize: 13, fontWeight: 600 }}>
-                {user.nombre || user.username}
-              </span>
-              <span className="muted" style={{ fontSize: 11 }}>
+            <div className="nav-user-info">
+              <span className="nav-user-name">{user.nombre || user.username}</span>
+              <span className="nav-user-role">
                 Huésped
               </span>
             </div>
@@ -119,7 +128,13 @@ export default function Nav() {
     <header className="topbar">
       <div className="container topbar-inner">
         <Link href="/panel" className="brand">
-          Mirador del Sol
+          <span className="brand-mark" aria-hidden="true">
+            <Leaf />
+          </span>
+          <span className="brand-copy">
+            <span className="brand-name">Mirador del Sol</span>
+            <span className="brand-note">Sierras de Córdoba · Argentina</span>
+          </span>
         </Link>
         <nav className="nav">
           {links.map((l) => (
@@ -133,9 +148,9 @@ export default function Nav() {
           ))}
         </nav>
         <div className="nav-user">
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
-            <span style={{ fontSize: 13, fontWeight: 600 }}>{user.username}</span>
-            <span className="muted" style={{ fontSize: 11 }}>
+          <div className="nav-user-info">
+            <span className="nav-user-name">{user.username}</span>
+            <span className="nav-user-role">
               {user.rol === 'ADMINISTRADOR' ? 'Administrador' : 'Recepcionista'}
             </span>
           </div>

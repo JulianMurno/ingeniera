@@ -40,3 +40,9 @@
 - [x] 6.3 Ejecutar `npm run lint` y `npm run build`; verificar que ambos terminan sin errores ni warnings nuevos atribuibles al landing.
 - [x] 6.4 Ejecutar la regresión manual de rutas: `/`, `/panel`, `/login`, `/portal`, `/portal/login` y `/portal/mis-reservas` con una sesión de huésped; comprobar que el landing no expone gestión, que el panel sigue funcionando y que el portal conserva su flujo.
 - [x] 6.5 Verificar el contraste de la paleta en ambos temas para texto normal, texto muted, botones primarios y enlaces; comprobar que los pares verde/crema y verde oscuro/texto claro cumplen AA.
+
+## 7. Identidad visual en rutas autenticadas
+
+- [x] 7.1 Aplicar la paleta verde/crema y los temas claro/oscuro a las rutas de gestión y del portal autenticado sin cambiar sus flujos funcionales.
+- [x] 7.2 Alinear la marca y la navegación autenticada con el emblema y la tipografía del landing, manteniendo el uso en pantallas pequeñas.
+- [x] 7.3 Ejecutar lint y build; comprobar que el panel y las páginas autenticadas de huésped conservan sus rutas y estados visuales.

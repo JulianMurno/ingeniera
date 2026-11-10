@@ -7,6 +7,7 @@ import { getSessionUser } from '@/lib/api';
 import Nav from './Nav';
 
 const STAFF_PATHS = ['/limpieza', '/mantenimiento'];
+const PUBLIC_APP_PATHS = ['/login', '/portal/login', '/portal/registro'];
 
 function StaffRouteGuard({ children }) {
   const router = useRouter();
@@ -46,10 +47,10 @@ export default function AppShell({ children }) {
   }
 
   const shell = (
-    <>
+    <div className={PUBLIC_APP_PATHS.includes(pathname) ? undefined : 'branded-shell'}>
       <Nav />
       <main className="container">{children}</main>
-    </>
+    </div>
   );
 
   if (STAFF_PATHS.includes(pathname)) {

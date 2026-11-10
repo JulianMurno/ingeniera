@@ -61,7 +61,7 @@ export default function Dashboard() {
           <p className="muted" style={{ margin: 0 }}>Gestión integral del hotel</p>
         </div>
         {state.health && (
-          <div className="spread" style={{ gap: 12, padding: '8px 16px', background: '#fff', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)' }}>
+          <div className="spread" style={{ gap: 12, padding: '8px 16px', background: 'var(--card)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)' }}>
             <span className="muted" style={{ fontSize: 13 }}>Sistema</span>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <Badge kind={state.health.status === 'ok' ? 'ok' : 'down'} />
