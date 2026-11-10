@@ -1,11 +1,12 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { api, clearSession, getSessionUser, isAdmin, isGuest } from '@/lib/api';
+import { api, clearSession, getSessionUser } from '@/lib/api';
 
 const STAFF_LINKS = [
-  { href: '/', label: 'Panel' },
+  { href: '/panel', label: 'Panel' },
   { href: '/reservas', label: 'Reservas' },
   { href: '/huespedes', label: 'Huéspedes' },
   { href: '/habitaciones', label: 'Habitaciones' },
@@ -30,9 +31,13 @@ const GUEST_LINKS = [
 export default function Nav() {
   const pathname = usePathname();
   const router = useRouter();
-  const user = getSessionUser();
-  const admin = isAdmin();
-  const guest = isGuest();
+  const [user, setUser] = useState(null);
+  const guest = user?.rol === 'HUESPED';
+  const admin = user?.rol === 'ADMINISTRADOR';
+
+  useEffect(() => {
+    setUser(getSessionUser());
+  }, [pathname]);
 
   function isActive(href) {
     return pathname === href || (href !== '/' && pathname.startsWith(`${href}/`));
@@ -45,6 +50,7 @@ export default function Nav() {
       /* la sesión se limpia igual */
     }
     clearSession();
+    setUser(null);
     router.push(guest ? '/portal/login' : '/login');
   }
 
@@ -54,7 +60,7 @@ export default function Nav() {
       <header className="topbar">
         <div className="container topbar-inner">
           <Link href={onPortal ? '/portal/login' : '/login'} className="brand">
-            Hotel Reservas
+            Mirador del Sol
           </Link>
           <nav className="nav">
             <Link href="/portal/login" className={`nav-link ${onPortal ? 'active' : ''}`}>
@@ -74,7 +80,7 @@ export default function Nav() {
       <header className="topbar">
         <div className="container topbar-inner">
           <Link href="/portal" className="brand">
-            Hotel Reservas
+            Mirador del Sol
           </Link>
           <nav className="nav">
             {GUEST_LINKS.map((l) => (
@@ -112,8 +118,8 @@ export default function Nav() {
   return (
     <header className="topbar">
       <div className="container topbar-inner">
-        <Link href="/" className="brand">
-          Hotel Reservas
+        <Link href="/panel" className="brand">
+          Mirador del Sol
         </Link>
         <nav className="nav">
           {links.map((l) => (

@@ -27,5 +27,5 @@
 ## 4. Cierre
 
 - [x] 4.1 Documentar en `src/docs/index.js` los endpoints de housekeeping y mantenimiento y el parámetro de configuración; verificar que `/api/docs` los refleja.
-- [x] 4.2 Actualizar README con el flujo operativo (programar → limpiar → inspeccionar) y la variable `HOUSEKEEPING_BLOCK_CHECKIN`; verificar que `npm run lint`, `npm test` y `npm run build` corren en verde.
+- [ ] 4.2 Actualizar README con el flujo operativo (programar → limpiar → inspeccionar) y la variable `HOUSEKEEPING_BLOCK_CHECKIN`; pendiente de `npm test` completo: `reservations.test.js` agotó el timeout de 5 s en `resetDb`. `npm run lint` y `npm run build` sí pasaron; las pruebas específicas de housekeeping pasaron con `--testTimeout=30000`.
 - [x] 4.3 (Opcional, solo si `add-cross-cutting-features` ya está mergeado) llamar `audit()` en las transiciones de limpieza y en el alta/cierre de tickets; verificar un test de auditoría. Si no está mergeado, dejarlo pendiente para integrarlo después.

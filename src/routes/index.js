@@ -30,7 +30,7 @@ router.use('/rates', requireAuth, requireStaff, rateRoutes);
 router.use('/reservations', requireAuth, requireStaff, reservationRoutes);
 router.use('/extras', requireAuth, requireStaff, extrasRoutes);
 router.use('/housekeeping', requireAuth, requireStaff, housekeepingRoutes);
-router.use('/maintenance', requireAuth, requireStaff, maintenanceRoutes);
+router.use('/maintenance', maintenanceRoutes);
 router.use('/reports', requireAuth, requireStaff, reportRoutes);
 router.use('/audit', requireAuth, requireStaff, auditRoutes);
 

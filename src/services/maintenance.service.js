@@ -3,6 +3,7 @@ const roomRepo = require('../repositories/room.repository');
 const housekeepingRepo = require('../repositories/housekeeping.repository');
 const { assertTransition } = require('../lib/maintenanceState');
 const { HttpError } = require('../lib/httpError');
+const { audit, ACCIONES, RECURSOS } = require('../lib/audit');
 
 const TIPOS_VALIDOS = ['FUGA', 'AVERIA', 'ELECTRICA', 'LIMPIEZA_REACTIVA', 'OTRO'];
 const PRIORIDADES_VALIDAS = ['BAJA', 'MEDIA', 'ALTA', 'URGENTE'];
@@ -15,7 +16,7 @@ async function ensureRoomExists(roomId) {
   return room;
 }
 
-async function createTicket(data, reportadoPorId) {
+async function createTicket(data, actor) {
   if (!TIPOS_VALIDOS.includes(data.tipo)) {
     throw new HttpError(422, 'VALIDATION_ERROR', 'Tipo inválido');
   }
@@ -29,8 +30,15 @@ async function createTicket(data, reportadoPorId) {
     prioridad: data.prioridad,
     estado: 'ABIERTO',
     descripcion: data.descripcion,
-    reportadoPorId,
+    reportadoPorId: actor.id,
     asignadoAId: data.asignadoAId || null,
+  });
+  await audit({
+    actor,
+    accion: ACCIONES.CREAR,
+    recurso: RECURSOS.MANTENIMIENTO,
+    recursoId: ticket.id,
+    detalle: { roomId: ticket.roomId, tipo: ticket.tipo, prioridad: ticket.prioridad },
   });
   return ticket;
 }
@@ -64,6 +72,19 @@ async function updateTicket(id, updates, actor) {
     }
   }
   const updated = await maintenanceRepo.update(id, updates);
+  if (updates.estado) {
+    await audit({
+      actor,
+      accion: updates.estado === 'CANCELADO' ? ACCIONES.CANCELAR : ACCIONES.MODIFICAR,
+      recurso: RECURSOS.MANTENIMIENTO,
+      recursoId: ticket.id,
+      detalle: {
+        roomId: ticket.roomId,
+        estadoAnterior: ticket.estado,
+        estadoNuevo: updated.estado,
+      },
+    });
+  }
   // If resolved, create inspection task if not exists
     if (updates.estado === 'RESUELTO') {
       const existing = await housekeepingRepo.findPendingOrInProgressInspection(ticket.roomId);
