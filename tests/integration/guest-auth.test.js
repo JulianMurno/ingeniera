@@ -212,7 +212,7 @@ describe('Aislamiento entre huésped y personal', () => {
       '/api/v1/reservations',
       '/api/v1/extras',
       '/api/v1/housekeeping',
-      '/api/v1/maintenance',
+      '/api/v1/maintenance/tickets',
       '/api/v1/reports',
       '/api/v1/audit',
     ];
