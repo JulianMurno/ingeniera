@@ -1,5 +1,6 @@
 const paymentRepo = require('../repositories/payment.repository');
 const resRepo = require('../repositories/reservation.repository');
+const extrasService = require('./extras.service');
 const { toDate } = require('./business.service');
 const { HttpError } = require('../lib/httpError');
 
@@ -72,6 +73,7 @@ async function buildInvoice(reservationId) {
   const pagos = await paymentRepo.findByReservation(reservation.id);
   const totalPagado = sumPagos(pagos);
   const noches = reservation.noches;
+  const cargos = await extrasService.resumenCargos(reservation.id);
 
   return {
     numero: `FAC-${reservation.codigo || reservation.id}`,
@@ -100,6 +102,9 @@ async function buildInvoice(reservationId) {
     },
     tarifaPromedioPorNoche: noches > 0 ? Math.round(reservation.total / noches) : 0,
     total: reservation.total,
+    totalEstadia: cargos.totalEstadia,
+    totalServicios: cargos.totalServicios,
+    totalGeneral: cargos.totalGeneral,
     pagos,
     totalPagado,
     saldoPendiente: Math.max(reservation.total - totalPagado, 0),

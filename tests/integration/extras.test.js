@@ -464,6 +464,73 @@ describe('Reporte de consumo', () => {
   });
 });
 
+describe('Factura con desglose de servicios', () => {
+  test('desglosa totalEstadia y totalServicios y excluye los cargos anulados', async () => {
+    const extraA = await crearExtra({ codigo: 'A1', precio: 1000 });
+    const extraB = await crearExtra({ codigo: 'A2', precio: 500 });
+    const reserva = await seedReserva({ total: 30000 });
+
+    await request(app)
+      .post(`/api/v1/reservations/${reserva.id}/charges`)
+      .set('Authorization', await authHeader('admin'))
+      .send({ extraId: extraA.id, cantidad: 2 });
+
+    const anulado = await request(app)
+      .post(`/api/v1/reservations/${reserva.id}/charges`)
+      .set('Authorization', await authHeader('admin'))
+      .send({ extraId: extraB.id, cantidad: 1 });
+
+    await request(app)
+      .patch(`/api/v1/reservations/${reserva.id}/charges/${anulado.body.id}`)
+      .set('Authorization', await authHeader('admin'));
+
+    const res = await request(app)
+      .get(`/api/v1/reservations/${reserva.id}/invoices`)
+      .set('Authorization', await authHeader('admin'));
+
+    expect(res.status).toBe(200);
+    expect(res.body.totalEstadia).toBe(30000);
+    expect(res.body.totalServicios).toBe(2000);
+    expect(res.body.totalGeneral).toBe(32000);
+    expect(res.body.total).toBe(30000);
+  });
+});
+
+describe('Auditoría de cargos', () => {
+  test('audita el alta y la anulación de un cargo', async () => {
+    const extra = await crearExtra({ precio: 1000 });
+    const reserva = await seedReserva();
+
+    const cargo = await request(app)
+      .post(`/api/v1/reservations/${reserva.id}/charges`)
+      .set('Authorization', await authHeader('recepcionista'))
+      .send({ extraId: extra.id, cantidad: 2 });
+
+    expect(cargo.status).toBe(201);
+
+    const alta = await prisma.auditLog.findFirst({
+      where: { recurso: 'CARGO', accion: 'CREAR', recursoId: String(cargo.body.id) },
+    });
+    expect(alta).not.toBeNull();
+    expect(JSON.parse(alta.detalle)).toMatchObject({
+      reservationId: reserva.id,
+      extraId: extra.id,
+      cantidad: 2,
+      importe: 2000,
+    });
+
+    await request(app)
+      .patch(`/api/v1/reservations/${reserva.id}/charges/${cargo.body.id}`)
+      .set('Authorization', await authHeader('admin'));
+
+    const anulacion = await prisma.auditLog.findFirst({
+      where: { recurso: 'CARGO', accion: 'CANCELAR', recursoId: String(cargo.body.id) },
+    });
+    expect(anulacion).not.toBeNull();
+    expect(JSON.parse(anulacion.detalle)).toMatchObject({ reservationId: reserva.id });
+  });
+});
+
 describe('Documentación de extras', () => {
   test('el spec documenta catálogo, cargos y consumo', () => {
     expect(spec.tags.map((t) => t.name)).toContain('Extras');

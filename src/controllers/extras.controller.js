@@ -48,7 +48,7 @@ async function getConsumo(req, res, next) {
 
 async function createCharge(req, res, next) {
   try {
-    const charge = await extrasService.registrarCargo(req.params.id, req.body, req.user.id);
+    const charge = await extrasService.registrarCargo(req.params.id, req.body, req.user);
     return res.status(201).json(charge);
   } catch (err) {
     return next(err);
@@ -66,7 +66,7 @@ async function listCharges(req, res, next) {
 
 async function cancelCharge(req, res, next) {
   try {
-    const charge = await extrasService.anularCargo(req.params.id, req.params.chargeId, req.user.id);
+    const charge = await extrasService.anularCargo(req.params.id, req.params.chargeId, req.user);
     return res.json(charge);
   } catch (err) {
     return next(err);
