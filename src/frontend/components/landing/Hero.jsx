@@ -6,6 +6,7 @@ export default function Hero({ content }) {
     <section className="ml-hero" id="inicio" aria-labelledby="hero-title">
       <div className="ml-hero-inner">
         <div className="ml-hero-copy">
+          <p className="ml-hero-brand">{content.brand.name}</p>
           <p className="ml-hero-kicker">
             <span className="ml-kicker-line" aria-hidden="true" />
             {content.hero.kicker}

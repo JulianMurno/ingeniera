@@ -3,6 +3,7 @@ const roomRepo = require('../repositories/room.repository');
 const userRepo = require('../repositories/user.repository');
 const { assertTransition } = require('../lib/housekeepingState');
 const { HttpError } = require('../lib/httpError');
+const { audit, ACCIONES, RECURSOS } = require('../lib/audit');
 
 const ESTADOS_SUCIA = new Set(['INSPECCION_FALLA']);
 const ESTADOS_LIMPIA = new Set(['LIMPIA', 'INSPECCION_OK']);
@@ -84,7 +85,21 @@ async function updateTask(id, updates, actor) {
       throw new HttpError(422, 'VALIDATION_ERROR', 'Usuario asignado no existe o está archivado');
     }
   }
-  return housekeepingRepo.update(id, updates);
+  const updated = await housekeepingRepo.update(id, updates);
+  if (updates.estado) {
+    await audit({
+      actor,
+      accion: updates.estado === 'CANCELADA' ? ACCIONES.CANCELAR : ACCIONES.MODIFICAR,
+      recurso: RECURSOS.HOUSEKEEPING,
+      recursoId: updated.id,
+      detalle: {
+        roomId: updated.roomId,
+        estadoAnterior: task.estado,
+        estadoNuevo: updated.estado,
+      },
+    });
+  }
+  return updated;
 }
 
 async function getResumen({ fecha }) {

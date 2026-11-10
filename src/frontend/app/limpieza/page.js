@@ -41,11 +41,14 @@ const TRANSICIONES = {
 
 export default function LimpiezaPage() {
   const admin = isAdmin();
-  const [filtros, setFiltros] = useState({ estado: '', tipo: '', fecha: '' });
+  const [filtros, setFiltros] = useState({ estado: '', tipo: '', fecha: '', roomId: '' });
   const [page, setPage] = useState(1);
   const [creating, setCreating] = useState(false);
   const [actionErr, setActionErr] = useState(null);
+  const [roomStatusId, setRoomStatusId] = useState('');
 
+  const rooms = useData('/api/v1/rooms?pageSize=100');
+  const roomStatus = useData(roomStatusId ? `/api/v1/rooms/${roomStatusId}` : null);
   const params = new URLSearchParams({ page, pageSize: 10 });
   Object.entries(filtros).forEach(([k, v]) => v && params.set(k, v));
   const { data, pagination, loading, error, reload } = useData(
@@ -67,6 +70,7 @@ export default function LimpiezaPage() {
       await api(`/api/v1/housekeeping/tasks/${t.id}`, { method: 'PATCH', body: { estado } });
       reload();
       resumen.reload();
+      roomStatus.reload();
     } catch (e) {
       setActionErr(e);
     }
@@ -89,9 +93,42 @@ export default function LimpiezaPage() {
             setCreating(false);
             reload();
             resumen.reload();
+            roomStatus.reload();
           }}
         />
       )}
+
+      <Card title="Estado actual por habitación">
+        <div className="grid grid-2">
+          <Field label="Habitación">
+            <Select value={roomStatusId} onChange={(e) => setRoomStatusId(e.target.value)}>
+              <option value="">Elegir habitación…</option>
+              {(rooms.data || []).map((room) => (
+                <option key={room.id} value={room.id}>
+                  {room.numero} · {room.tipo}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <div>
+            {!roomStatusId ? (
+              <p className="muted">Seleccioná una habitación para consultar su estado derivado.</p>
+            ) : roomStatus.loading ? (
+              <Loading />
+            ) : roomStatus.error ? (
+              <ErrorMsg error={roomStatus.error} />
+            ) : (
+              <div className="row">
+                <span>
+                  Limpieza: <Badge kind={roomStatus.data?.limpieza} />
+                </span>
+                <span>Incidencias abiertas: {roomStatus.data?.incidenciasAbiertas ?? 0}</span>
+              </div>
+            )}
+          </div>
+        </div>
+        <ErrorMsg error={rooms.error} />
+      </Card>
 
       <Card title="Resumen por estado">
         {resumen.loading ? (
@@ -128,6 +165,16 @@ export default function LimpiezaPage() {
               {TIPOS.map((t) => (
                 <option key={t} value={t}>
                   {t}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Habitación">
+            <Select value={filtros.roomId} onChange={setFiltro('roomId')}>
+              <option value="">Todas</option>
+              {(rooms.data || []).map((room) => (
+                <option key={room.id} value={room.id}>
+                  {room.numero}
                 </option>
               ))}
             </Select>

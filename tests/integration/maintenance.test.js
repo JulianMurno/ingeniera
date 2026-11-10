@@ -1,5 +1,5 @@
 const request = require('supertest');
-const { app, prisma, resetDb, tokenFor } = require('../helpers/db');
+const { app, prisma, resetDb, tokenFor, registerGuest } = require('../helpers/db');
 
 beforeEach(resetDb);
 
@@ -48,6 +48,23 @@ describe('Mantenimiento', () => {
       expect(res.body.estado).toBe('ABIERTO');
       expect(res.body.roomId).toBe(room.id);
       expect(res.body.reportadoPorId).toBeDefined();
+    });
+
+    test('un huésped puede reportar, pero no listar ni modificar tickets', async () => {
+      const { token } = await registerGuest();
+      const created = await createTicket(token, validTicket());
+      const list = await request(app)
+        .get('/api/v1/maintenance/tickets')
+        .set('Authorization', auth(token));
+      const detail = await request(app)
+        .get(`/api/v1/maintenance/tickets/${created.body.id}`)
+        .set('Authorization', auth(token));
+      const update = await updateTicket(token, created.body.id, { estado: 'EN_PROCESO' });
+
+      expect(created.status).toBe(201);
+      expect(list.status).toBe(403);
+      expect(detail.status).toBe(403);
+      expect(update.status).toBe(403);
     });
 
     test('una habitación inexistente responde 404', async () => {
@@ -155,6 +172,25 @@ describe('Mantenimiento', () => {
       expect(resuelto.body.estado).toBe('RESUELTO');
       expect(resuelto.body.resolucion).toBe('Se reemplazó el sifón');
       expect(resuelto.body.resueltoEn).toBeDefined();
+    });
+
+    test('audita el alta y la resolución del ticket', async () => {
+      const created = await createTicket(recepcionistaToken, validTicket());
+      const resolved = await updateTicket(recepcionistaToken, created.body.id, {
+        estado: 'RESUELTO',
+        resolucion: 'Se reemplazó el sifón',
+      });
+
+      expect(resolved.status).toBe(200);
+      const entries = await prisma.auditLog.findMany({
+        where: { recurso: 'MANTENIMIENTO', recursoId: String(created.body.id) },
+        orderBy: { id: 'asc' },
+      });
+      expect(entries.map((entry) => entry.accion)).toEqual(['CREAR', 'MODIFICAR']);
+      expect(JSON.parse(entries[1].detalle)).toMatchObject({
+        estadoAnterior: 'ABIERTO',
+        estadoNuevo: 'RESUELTO',
+      });
     });
 
     test('resolver sin resolución responde 422', async () => {

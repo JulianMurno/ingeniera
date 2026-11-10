@@ -677,12 +677,15 @@ const spec = {
         tags: ['Habitaciones'],
         summary: 'Obtiene una habitación por id',
         description:
-          'Incluye `limpieza` (derivada de la última tarea de housekeeping no cancelada) y ' +
+          'Solo `ADMINISTRADOR` y `RECEPCIONISTA`. Incluye `limpieza` (derivada de la última tarea ' +
+          'de housekeeping no cancelada) y ' +
           '`incidenciasAbiertas` (tickets de mantenimiento en `ABIERTO`/`EN_PROCESO`).',
         security: [{ bearerAuth: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
         responses: {
           200: { description: 'Habitación encontrada' },
+          401: { $ref: '#/components/responses/Error401' },
+          403: { $ref: '#/components/responses/Error403' },
           404: { $ref: '#/components/responses/Error404' },
         },
       },
@@ -726,14 +729,16 @@ const spec = {
         tags: ['Habitaciones'],
         summary: 'Historial de limpieza y mantenimiento de una habitación',
         description:
-          'Devuelve las tareas de housekeeping y los tickets de mantenimiento de la habitación ' +
-          'combinados en `history`, ordenados por fecha de actividad descendente. Cada entrada ' +
+          'Solo `ADMINISTRADOR` y `RECEPCIONISTA`. Devuelve las tareas de housekeeping y los tickets ' +
+          'de mantenimiento de la habitación combinados en `history`, ordenados por fecha de actividad ' +
+          'descendente. Cada entrada ' +
           'incluye `origen` (`tarea` o `ticket`) además de sus campos propios (entre ellos `tipo`).',
         security: [{ bearerAuth: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
         responses: {
           200: { description: 'Historial de la habitación' },
           401: { $ref: '#/components/responses/Error401' },
+          403: { $ref: '#/components/responses/Error403' },
           404: { $ref: '#/components/responses/Error404' },
         },
       },
@@ -1320,8 +1325,8 @@ const spec = {
         tags: ['Housekeeping'],
         summary: 'Lista tareas de limpieza con filtros y paginación',
         description:
-          'Filtros opcionales `estado`, `tipo`, `roomId`, `asignadoAId` y `fecha` (YYYY-MM-DD). ' +
-          'Responde `{ data, pagination }`.',
+          'Solo `ADMINISTRADOR` y `RECEPCIONISTA`. Filtros opcionales `estado`, `tipo`, `roomId`, ' +
+          '`asignadoAId` y `fecha` (YYYY-MM-DD). Responde `{ data, pagination }`.',
         security: [{ bearerAuth: [] }],
         parameters: [
           { name: 'estado', in: 'query', schema: { type: 'string' } },
@@ -1335,6 +1340,7 @@ const spec = {
         responses: {
           200: { description: 'Tareas paginadas' },
           401: { $ref: '#/components/responses/Error401' },
+          403: { $ref: '#/components/responses/Error403' },
           422: { $ref: '#/components/responses/Error422' },
         },
       },
@@ -1346,8 +1352,8 @@ const spec = {
         description:
           'Las transiciones válidas son `PENDIENTE → EN_PROCESO → LIMPIA → EN_INSPECCION → ' +
           'INSPECCION_OK | INSPECCION_FALLA`, más `CANCELADA` y `INSPECCION_FALLA → EN_PROCESO`. ' +
-          'Una transición inválida o mover un estado terminal responde `409`. Cualquier usuario ' +
-          'autenticado puede reclamar una tarea sin asignar (se asigna a sí mismo) y avanzarla; ' +
+          'Una transición inválida o mover un estado terminal responde `409`. Solo `ADMINISTRADOR` ' +
+          'y `RECEPCIONISTA` pueden reclamar una tarea sin asignar (se asigna a sí mismo) y avanzarla; ' +
           'asignar a otro usuario y cancelar requieren `ADMINISTRADOR` (`403` en caso contrario).',
         security: [{ bearerAuth: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
@@ -1372,13 +1378,14 @@ const spec = {
         tags: ['Housekeeping'],
         summary: 'Resumen de tareas por estado y por responsable',
         description:
-          'Devuelve `porEstado` (conteo por estado) y `porAsignado` (conteo por responsable). Si la ' +
-          'fecha no es válida responde `422`.',
+          'Disponible para `ADMINISTRADOR` y `RECEPCIONISTA`. Devuelve `porEstado` (conteo por estado) ' +
+          'y `porAsignado` (conteo por responsable). Si la fecha no es válida responde `422`.',
         security: [{ bearerAuth: [] }],
         parameters: [{ name: 'fecha', in: 'query', schema: { type: 'string', format: 'date' } }],
         responses: {
           200: { description: 'Resumen de carga de trabajo' },
           401: { $ref: '#/components/responses/Error401' },
+          403: { $ref: '#/components/responses/Error403' },
           422: { $ref: '#/components/responses/Error422' },
         },
       },
@@ -1408,7 +1415,8 @@ const spec = {
         tags: ['Mantenimiento'],
         summary: 'Lista tickets de mantenimiento con filtros y paginación',
         description:
-          'Filtros opcionales `estado`, `prioridad`, `roomId` y `tipo`. Responde `{ data, pagination }`.',
+          'Solo `ADMINISTRADOR` y `RECEPCIONISTA`. Filtros opcionales `estado`, `prioridad`, ' +
+          '`roomId` y `tipo`. Responde `{ data, pagination }`.',
         security: [{ bearerAuth: [] }],
         parameters: [
           { name: 'estado', in: 'query', schema: { type: 'string' } },
@@ -1421,6 +1429,7 @@ const spec = {
         responses: {
           200: { description: 'Tickets paginados' },
           401: { $ref: '#/components/responses/Error401' },
+          403: { $ref: '#/components/responses/Error403' },
           422: { $ref: '#/components/responses/Error422' },
         },
       },
@@ -1429,11 +1438,13 @@ const spec = {
       get: {
         tags: ['Mantenimiento'],
         summary: 'Obtiene un ticket de mantenimiento',
+        description: 'Disponible para `ADMINISTRADOR` y `RECEPCIONISTA`.',
         security: [{ bearerAuth: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
         responses: {
           200: { description: 'Ticket encontrado' },
           401: { $ref: '#/components/responses/Error401' },
+          403: { $ref: '#/components/responses/Error403' },
           404: { $ref: '#/components/responses/Error404' },
         },
       },
@@ -1441,7 +1452,8 @@ const spec = {
         tags: ['Mantenimiento'],
         summary: 'Actualiza un ticket (avanzar, resolver o cancelar)',
         description:
-          'Transiciones permitidas: `ABIERTO → EN_PROCESO → RESUELTO` y `ABIERTO|EN_PROCESO → ' +
+          'Disponible para `ADMINISTRADOR` y `RECEPCIONISTA`. Transiciones permitidas: ' +
+          '`ABIERTO → EN_PROCESO → RESUELTO` y `ABIERTO|EN_PROCESO → ' +
           'CANCELADO` (cancelar solo `ADMINISTRADOR`, `403` en caso contrario). Resolver exige una ' +
           '`resolucion` no vacía (`422` si no viene). Al resolver se crea automáticamente una tarea ' +
           'de `INSPECCION` para la habitación si no hay ya una `PENDIENTE` o `EN_INSPECCION`.',

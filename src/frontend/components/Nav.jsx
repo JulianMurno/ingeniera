@@ -1,8 +1,9 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { api, clearSession, getSessionUser, isAdmin, isGuest } from '@/lib/api';
+import { api, clearSession, getSessionUser } from '@/lib/api';
 
 const STAFF_LINKS = [
   { href: '/panel', label: 'Panel' },
@@ -30,9 +31,13 @@ const GUEST_LINKS = [
 export default function Nav() {
   const pathname = usePathname();
   const router = useRouter();
-  const user = getSessionUser();
-  const admin = isAdmin();
-  const guest = isGuest();
+  const [user, setUser] = useState(null);
+  const guest = user?.rol === 'HUESPED';
+  const admin = user?.rol === 'ADMINISTRADOR';
+
+  useEffect(() => {
+    setUser(getSessionUser());
+  }, [pathname]);
 
   function isActive(href) {
     return pathname === href || (href !== '/' && pathname.startsWith(`${href}/`));
@@ -45,6 +50,7 @@ export default function Nav() {
       /* la sesión se limpia igual */
     }
     clearSession();
+    setUser(null);
     router.push(guest ? '/portal/login' : '/login');
   }
 

@@ -5,7 +5,7 @@
   --ml-surface-strong: #f1e8d7;
   --ml-ink: #17221d;
   --ml-ink-soft: #405147;
-  --ml-muted: #6a786e;
+  --ml-muted: #5a6b62;
   --ml-green: #1f5e46;
   --ml-green-deep: #123b2c;
   --ml-green-mid: #2a7157;
@@ -47,7 +47,7 @@
   --ml-surface-strong: #1b3127;
   --ml-ink: #f6f1e5;
   --ml-ink-soft: #d6ded8;
-  --ml-muted: #a9b8ae;
+  --ml-muted: #b9c8bf;
   --ml-green: #7fc9a8;
   --ml-green-deep: #a7d8bf;
   --ml-green-mid: #5eb48f;
@@ -364,6 +364,16 @@
   color: var(--ml-green);
   font-size: 13px;
   font-weight: 700;
+}
+
+.ml-hero-brand {
+  margin: 0 0 12px;
+  color: var(--ml-green);
+  font-family: var(--ml-display);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .ml-kicker-line {

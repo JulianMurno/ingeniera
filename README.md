@@ -98,14 +98,14 @@ Toda ruta protegida requiere `Authorization: Bearer <token>` (obtenido en `POST 
 | DELETE | `/api/v1/extras/{id}`              | Da de baja un servicio (borrado lógico)           | ADMINISTRADOR |
 | GET    | `/api/v1/extras/consumo?desde=&hasta=` | Consumo por servicio en el período (excluye anulados) | autenticado   |
 | POST   | `/api/v1/housekeeping/tasks`       | Programa tarea de limpieza/inspección            | ADMINISTRADOR |
-| GET    | `/api/v1/housekeeping/tasks`       | Lista tareas con filtros y paginación            | autenticado   |
-| PATCH  | `/api/v1/housekeeping/tasks/{id}`   | Actualiza tarea (avanza, asigna, cancela)        | autenticado   |
-| GET    | `/api/v1/housekeeping/resumen`      | Resumen de tareas por estado y responsable       | autenticado   |
-| GET    | `/api/v1/rooms/{id}/housekeeping`   | Historial de limpieza y mantenimiento de habitación | autenticado   |
+| GET    | `/api/v1/housekeeping/tasks`       | Lista tareas con filtros y paginación            | ADMINISTRADOR / RECEPCIONISTA |
+| PATCH  | `/api/v1/housekeeping/tasks/{id}`   | Actualiza tarea (avanza, asigna, cancela)        | ADMINISTRADOR / RECEPCIONISTA |
+| GET    | `/api/v1/housekeeping/resumen`      | Resumen de tareas por estado y responsable       | ADMINISTRADOR / RECEPCIONISTA |
+| GET    | `/api/v1/rooms/{id}/housekeeping`   | Historial de limpieza y mantenimiento de habitación | ADMINISTRADOR / RECEPCIONISTA |
 | POST   | `/api/v1/maintenance/tickets`       | Reporta ticket de mantenimiento                  | autenticado   |
-| GET    | `/api/v1/maintenance/tickets`       | Lista tickets con filtros y paginación           | autenticado   |
-| GET    | `/api/v1/maintenance/tickets/{id}`  | Detalle de ticket                                | autenticado   |
-| PATCH  | `/api/v1/maintenance/tickets/{id}`  | Actualiza ticket (resuelve/cancela)              | autenticado   |
+| GET    | `/api/v1/maintenance/tickets`       | Lista tickets con filtros y paginación           | ADMINISTRADOR / RECEPCIONISTA |
+| GET    | `/api/v1/maintenance/tickets/{id}`  | Detalle de ticket                                | ADMINISTRADOR / RECEPCIONISTA |
+| PATCH  | `/api/v1/maintenance/tickets/{id}`  | Actualiza ticket (resuelve/cancela)              | ADMINISTRADOR / RECEPCIONISTA |
 | POST   | `/api/v1/reservations/{id}/payments` | Registra un pago contra la reserva             | autenticado   |
 | GET    | `/api/v1/reservations/{id}/invoices` | Genera la factura de la reserva                | autenticado   |
 | GET    | `/api/v1/reports/ocupacion`          | Ocupación del hotel para un rango              | autenticado   |
@@ -170,8 +170,10 @@ tarifas, antelación y estancia, nacen en `CONFIRMADA` con su `codigo` y envían
 confirmación. El huésped puede consultar `GET /availability` para buscar habitaciones.
 
 **Aislamiento de roles:** las rutas de gestión (`/users`, `/guests`, `/rooms`, `/rates`,
-`/reservations`, `/extras`, `/housekeeping`, `/maintenance`, `/reports`, `/audit`) rechazan un token
-`HUESPED` con `403`; las rutas `/guest/*` rechazan al personal con `403`. En el cuerpo de creación,
+`/reservations`, `/extras`, `/housekeeping`, `/reports`, `/audit` y las consultas/cambios de
+`/maintenance`) rechazan un token `HUESPED` con `403`; un huésped autenticado puede crear un ticket
+de mantenimiento, pero no listarlo ni modificarlo. Las rutas `/guest/*` rechazan al personal con
+`403`. En el cuerpo de creación,
 un `guestId` distinto del token responde `403` (el servicio siempre inyecta el del token).
 
 Ejemplo reproducible con la base sembrada:
@@ -429,7 +431,8 @@ Todos los filtros son opcionales y combinables; la respuesta es `{ data, paginat
 El flujo operativo es: **programar → limpiar → inspeccionar**.
 
 - `POST /housekeeping/tasks` crea una tarea de limpieza (`PENDIENTE`), los `PATCH` avanzan por `EN_PROCESO → LIMPIA → EN_INSPECCION → INSPECCION_OK | INSPECCION_FALLA` (o `CANCELADA`). `GET /housekeeping/tasks` filtra por `estado`, `tipo`, `roomId`, `asignadoAId` y `fecha`, y `GET /housekeeping/resumen` agrupa por estado y por asignatario. El detalle de una habitación (`GET /rooms/{id}`) incluye `limpieza` (derivada de la última tarea no cancelada) e `incidenciasAbiertas`, y `GET /rooms/{id}/housekeeping` devuelve el historial combinado de tareas y tickets.
-- `POST /maintenance/tickets` registra una incidencia; `PATCH /maintenance/tickets/{id}` la mueve por `ABIERTO → EN_PROCESO → RESUELTO` (o `CANCELADO`, solo administrador). Al resolver un ticket se crea automáticamente una tarea de `INSPECCION` para esa habitación (sin duplicar si ya hay una `PENDIENTE`/`EN_INSPECCION`).
+- `POST /maintenance/tickets` registra una incidencia para cualquier usuario autenticado; solo el personal (`ADMINISTRADOR`/`RECEPCIONISTA`) puede listar, ver o cambiar tickets. `PATCH /maintenance/tickets/{id}` la mueve por `ABIERTO → EN_PROCESO → RESUELTO` (o `CANCELADO`, solo administrador). Al resolver un ticket se crea automáticamente una tarea de `INSPECCION` para esa habitación (sin duplicar si ya hay una `PENDIENTE`/`EN_INSPECCION`).
+- Las pantallas `/limpieza` y `/mantenimiento` están restringidas al personal; el huésped que navegue directamente vuelve a `/portal`. Las transiciones de limpieza y el alta/cierre de tickets quedan en auditoría.
 - `HOUSEKEEPING_BLOCK_CHECKIN` (default `false`): si está activa, el check-in de una reserva responde `409 HABITACION_NO_LIMPIA` cuando la habitación no está `LIMPIA`.
 
 ## Reglas de disponibilidad y tarifas

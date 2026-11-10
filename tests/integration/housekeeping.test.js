@@ -1,5 +1,5 @@
 const request = require('supertest');
-const { app, prisma, resetDb, tokenFor, withEnv } = require('../helpers/db');
+const { app, prisma, resetDb, tokenFor, registerGuest, withEnv } = require('../helpers/db');
 const { day } = require('../helpers/dates');
 
 beforeEach(resetDb);
@@ -75,6 +75,21 @@ describe('Housekeeping', () => {
       });
 
       expect(res.status).toBe(403);
+    });
+
+    test('un huésped no puede programar ni consultar tareas (403)', async () => {
+      const { token } = await registerGuest();
+      const createRes = await createTask(token, {
+        roomId: room.id,
+        tipo: 'LIMPIEZA',
+        fechaProgramada: new Date().toISOString(),
+      });
+      const listRes = await request(app)
+        .get('/api/v1/housekeeping/tasks')
+        .set('Authorization', auth(token));
+
+      expect(createRes.status).toBe(403);
+      expect(listRes.status).toBe(403);
     });
 
     test('faltar un campo requerido responde 422', async () => {
@@ -158,6 +173,22 @@ describe('Housekeeping', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.estado).toBe('CANCELADA');
+    });
+
+    test('registra la transición de limpieza en auditoría', async () => {
+      const task = await seedTask();
+      const res = await updateTask(recepcionistaToken, task.id, { estado: 'EN_PROCESO' });
+
+      expect(res.status).toBe(200);
+      const entry = await prisma.auditLog.findFirst({
+        where: { recurso: 'HOUSEKEEPING', recursoId: String(task.id) },
+      });
+      expect(entry.accion).toBe('MODIFICAR');
+      expect(JSON.parse(entry.detalle)).toMatchObject({
+        roomId: room.id,
+        estadoAnterior: 'PENDIENTE',
+        estadoNuevo: 'EN_PROCESO',
+      });
     });
 
     test('una tarea inexistente responde 404', async () => {

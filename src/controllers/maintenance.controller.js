@@ -2,7 +2,7 @@ const maintenanceService = require('../services/maintenance.service');
 
 async function createTicket(req, res, next) {
   try {
-    const ticket = await maintenanceService.createTicket(req.body, req.user.id);
+    const ticket = await maintenanceService.createTicket(req.body, req.user);
     return res.status(201).json(ticket);
   } catch (err) {
     return next(err);
