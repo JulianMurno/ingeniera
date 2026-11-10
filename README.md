@@ -307,13 +307,10 @@ del período por servicio y devuelve `{ data, totalPeriodo }`.
 
 ### Flujo de facturación
 
-`registrar cargo → anular (si aplica) → facturar`. El dato para la factura es `totalGeneral`
-(`totalEstadia` + `totalServicios`). 
-
-> **Integración pendiente** (tareas 4.2 y 4.3): `add-cross-cutting-features` ya está en `main`, pero
-> `GET /reservations/{id}/invoices` todavía no desglosa `totalEstadia` y `totalServicios` (falta usar
-> `extras.service.resumenCargos` en el builder de la factura), y registrar/anular cargos todavía no
-> llama a `audit()`. Hasta entonces la factura sigue usando sólo `Reservation.total`.
+`registrar cargo → anular (si aplica) → facturar`. La factura (`GET /reservations/{id}/invoices`)
+desglosa `totalEstadia` (`Reservation.total`), `totalServicios` (cargos no anulados) y
+`totalGeneral` (`totalEstadia + totalServicios`). El alta y la anulación de cargos se registran en
+auditoría con recurso `CARGO`.
 
 ## Frontend (Next.js)
 
@@ -519,8 +516,10 @@ El detalle de la reserva (`GET /reservations/{id}`) incluye ahora `estadoPago`, 
 
 Genera la **factura** de la reserva bajo demanda (no se persiste, no hay tabla `Invoice`): se arma
 con los datos del huésped, la habitación y su tarifa base, la estancia, el `total`, los pagos
-registrados, el `totalPagado` y el `saldoPendiente`. La numeración es local (`FAC-<código de la
-reserva>`) y no sigue una secuencia regulada por un ente fiscal.
+registrados, el `totalPagado` y el `saldoPendiente`. Incluye el desglose `totalEstadia`
+(`Reservation.total`), `totalServicios` (cargos no anulados) y `totalGeneral` (la suma de ambos). La
+numeración es local (`FAC-<código de la reserva>`) y no sigue una secuencia regulada por un ente
+fiscal.
 
 ## Reportes
 
@@ -553,9 +552,10 @@ Ejecuta `SELECT 1` contra la base:
 ## Auditoría
 
 Las operaciones sensibles se registran automáticamente con autor, acción, recurso, fecha y un
-detalle JSON: creación, modificación y cancelación de **reservas**, y gestión (alta, edición,
-baja) de **habitaciones** y **usuarios**. La escritura es **best-effort**: si el registro falla no
-rompe la operación principal.
+detalle JSON: creación, modificación y cancelación de **reservas**; gestión (alta, edición, baja) de
+**habitaciones** y **usuarios**; transiciones de **limpieza** y alta/cierre de **tickets de
+mantenimiento**; y alta/anulación de **cargos** de servicios adicionales. La escritura es
+**best-effort**: si el registro falla no rompe la operación principal.
 
 `GET /audit` (solo `ADMINISTRADOR`) lista los registros del más reciente al más antiguo con
 paginación (`{ data, pagination }`) y filtros opcionales combinables:
@@ -564,7 +564,7 @@ paginación (`{ data, pagination }`) y filtros opcionales combinables:
 | ----------- | -------------------------------------------------- |
 | `userId`    | Solo entradas de ese usuario                       |
 | `accion`    | `CREAR` \| `MODIFICAR` \| `CANCELAR` \| `ELIMINAR` |
-| `recurso`   | `RESERVA` \| `HABITACION` \| `USUARIO`             |
+| `recurso`   | `RESERVA` \| `HABITACION` \| `USUARIO` \| `HOUSEKEEPING` \| `MANTENIMIENTO` \| `CARGO` |
 | `desde` / `hasta` | Rango de fechas inclusivo (`createdAt`)     |
 | `page` / `pageSize` | Paginación (por defecto `1` / `10`, máx. `100`) |
 

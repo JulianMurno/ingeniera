@@ -1,6 +1,7 @@
 const extrasRepo = require('../repositories/extras.repository');
 const resRepo = require('../repositories/reservation.repository');
 const { HttpError } = require('../lib/httpError');
+const { audit, ACCIONES, RECURSOS } = require('../lib/audit');
 const { CONFIRMADA, EN_CURSO } = require('../lib/reservationState');
 
 const ESTADOS_CON_CARGOS = [CONFIRMADA, EN_CURSO];
@@ -66,7 +67,7 @@ async function calcularResumen(reservation) {
   };
 }
 
-async function registrarCargo(reservationId, data, userId) {
+async function registrarCargo(reservationId, data, actor) {
   const reservation = await getReservationOr404(reservationId);
 
   if (!ESTADOS_CON_CARGOS.includes(reservation.estado)) {
@@ -83,16 +84,33 @@ async function registrarCargo(reservationId, data, userId) {
   }
 
   const precioUnitario = extra.precio;
-  return extrasRepo.createCharge({
+  const importe = precioUnitario * data.cantidad;
+  const charge = await extrasRepo.createCharge({
     reservationId: reservation.id,
     extraId: extra.id,
     cantidad: data.cantidad,
     precioUnitario,
-    importe: precioUnitario * data.cantidad,
+    importe,
     estado: ESTADO_PENDIENTE,
     nota: data.nota ?? null,
-    registradoPorId: userId,
+    registradoPorId: actor.id,
   });
+
+  await audit({
+    actor,
+    accion: ACCIONES.CREAR,
+    recurso: RECURSOS.CARGO,
+    recursoId: charge.id,
+    detalle: {
+      reservationId: reservation.id,
+      extraId: extra.id,
+      cantidad: data.cantidad,
+      precioUnitario,
+      importe,
+    },
+  });
+
+  return charge;
 }
 
 async function listarCargos(reservationId) {
@@ -102,8 +120,8 @@ async function listarCargos(reservationId) {
   return { data, resumen };
 }
 
-async function anularCargo(reservationId, chargeId, userId) {
-  await getReservationOr404(reservationId);
+async function anularCargo(reservationId, chargeId, actor) {
+  const reservation = await getReservationOr404(reservationId);
   const charge = await extrasRepo.findChargeById(chargeId);
   if (!charge || charge.reservationId !== Number(reservationId)) {
     throw new HttpError(404, 'NOT_FOUND', 'Cargo no encontrado');
@@ -111,10 +129,26 @@ async function anularCargo(reservationId, chargeId, userId) {
   if (charge.estado === ESTADO_CANCELADO) {
     return charge;
   }
-  return extrasRepo.cancelCharge(charge.id, {
-    anuladoPorId: userId,
+  const anulado = await extrasRepo.cancelCharge(charge.id, {
+    anuladoPorId: actor.id,
     anuladoEn: new Date(),
   });
+
+  await audit({
+    actor,
+    accion: ACCIONES.CANCELAR,
+    recurso: RECURSOS.CARGO,
+    recursoId: anulado.id,
+    detalle: {
+      reservationId: reservation.id,
+      extraId: charge.extraId,
+      importe: charge.importe,
+      estadoAnterior: charge.estado,
+      estadoNuevo: anulado.estado,
+    },
+  });
+
+  return anulado;
 }
 
 async function resumenCargos(reservationId) {
