@@ -11,6 +11,7 @@ import {
   Input,
   Loading,
   Msg,
+  PageHeader,
   Pager,
   Select,
   Table,
@@ -39,9 +40,17 @@ function toCreate(form) {
     estado: form.estado,
     descripcion: form.descripcion || undefined,
     comodidades: form.comodidades
-      ? form.comodidades.split(',').map((s) => s.trim()).filter(Boolean)
+      ? form.comodidades
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
       : undefined,
-    fotos: form.fotos ? form.fotos.split(',').map((s) => s.trim()).filter(Boolean) : undefined,
+    fotos: form.fotos
+      ? form.fotos
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : undefined,
   };
 }
 
@@ -92,30 +101,46 @@ export default function HabitacionesPage() {
 
   return (
     <>
-      <div className="spread">
-        <h1>Habitaciones</h1>
-        <Btn variant="primary" onClick={() => { setCreating(true); setEditing(null); }}>
-          + Nueva habitación
-        </Btn>
-      </div>
+      <PageHeader
+        title="Habitaciones"
+        actions={
+          <Btn
+            variant="primary"
+            onClick={() => {
+              setCreating(true);
+              setEditing(null);
+            }}
+          >
+            + Nueva habitación
+          </Btn>
+        }
+      />
 
       <Card title="Filtros">
-        <div className="row">
+        <div className="flex flex-wrap items-end gap-4">
           <Field label="Tipo">
             <Select
               value={filtros.tipo}
-              onChange={(e) => { setFiltros((f) => ({ ...f, tipo: e.target.value })); setPage(1); }}
+              onChange={(e) => {
+                setFiltros((f) => ({ ...f, tipo: e.target.value }));
+                setPage(1);
+              }}
             >
               <option value="">Todos</option>
               {Object.values(ROOM_TYPES).map((t) => (
-                <option key={t} value={t}>{t}</option>
+                <option key={t} value={t}>
+                  {t}
+                </option>
               ))}
             </Select>
           </Field>
           <Field label="Estado">
             <Select
               value={filtros.estado}
-              onChange={(e) => { setFiltros((f) => ({ ...f, estado: e.target.value })); setPage(1); }}
+              onChange={(e) => {
+                setFiltros((f) => ({ ...f, estado: e.target.value }));
+                setPage(1);
+              }}
             >
               <option value="">Todos</option>
               <option value="DISPONIBLE">Disponible</option>
@@ -126,14 +151,20 @@ export default function HabitacionesPage() {
             <Input
               type="number"
               value={filtros.tarifaMin}
-              onChange={(e) => { setFiltros((f) => ({ ...f, tarifaMin: e.target.value })); setPage(1); }}
+              onChange={(e) => {
+                setFiltros((f) => ({ ...f, tarifaMin: e.target.value }));
+                setPage(1);
+              }}
             />
           </Field>
           <Field label="Tarifa máxima">
             <Input
               type="number"
               value={filtros.tarifaMax}
-              onChange={(e) => { setFiltros((f) => ({ ...f, tarifaMax: e.target.value })); setPage(1); }}
+              onChange={(e) => {
+                setFiltros((f) => ({ ...f, tarifaMax: e.target.value }));
+                setPage(1);
+              }}
             />
           </Field>
         </div>
@@ -144,7 +175,10 @@ export default function HabitacionesPage() {
           title="Nueva habitación"
           initial={FORM_VACIO}
           onSubmit={async (body) => api('/api/v1/rooms', { method: 'POST', body })}
-          onClose={() => { setCreating(false); reload(); }}
+          onClose={() => {
+            setCreating(false);
+            reload();
+          }}
         />
       )}
       {editing && (
@@ -152,7 +186,10 @@ export default function HabitacionesPage() {
           title={`Editar habitación #${editing.id}`}
           initial={fromRoom(editing)}
           onSubmit={async (body) => api(`/api/v1/rooms/${editing.id}`, { method: 'PATCH', body })}
-          onClose={() => { setEditing(null); reload(); }}
+          onClose={() => {
+            setEditing(null);
+            reload();
+          }}
         />
       )}
 
@@ -171,18 +208,28 @@ export default function HabitacionesPage() {
                 <td>{r.numero}</td>
                 <td>{r.tipo}</td>
                 <td>{r.capacidad} pax</td>
-                <td className="money">{fmtMoney(r.tarifa)}</td>
-                <td><Badge kind={r.estado} /></td>
-                <td className="spread">
-                  <Btn variant="sm" onClick={() => { setEditing(r); setCreating(false); }}>
-                    Editar
-                  </Btn>
-                  <Btn variant="sm" onClick={() => toggleEstado(r)}>
-                    {r.estado === 'MANTENIMIENTO' ? 'Poner disponible' : 'A mantenimiento'}
-                  </Btn>
-                  <Btn variant="sm btn-danger" onClick={() => eliminar(r)}>
-                    Eliminar
-                  </Btn>
+                <td className="font-semibold tabular-nums">{fmtMoney(r.tarifa)}</td>
+                <td>
+                  <Badge kind={r.estado} />
+                </td>
+                <td>
+                  <div className="flex flex-wrap gap-2">
+                    <Btn
+                      size="sm"
+                      onClick={() => {
+                        setEditing(r);
+                        setCreating(false);
+                      }}
+                    >
+                      Editar
+                    </Btn>
+                    <Btn size="sm" onClick={() => toggleEstado(r)}>
+                      {r.estado === 'MANTENIMIENTO' ? 'Poner disponible' : 'A mantenimiento'}
+                    </Btn>
+                    <Btn variant="danger" size="sm" onClick={() => eliminar(r)}>
+                      Eliminar
+                    </Btn>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -222,14 +269,16 @@ function RoomForm({ title, initial, onSubmit, onClose }) {
       <ErrorMsg error={err} />
       <Msg>{ok}</Msg>
       <form onSubmit={submit}>
-        <div className="grid grid-2">
+        <div className="grid gap-4 md:grid-cols-2">
           <Field label="Número *">
             <Input value={form.numero} onChange={set('numero')} required />
           </Field>
           <Field label="Tipo *">
             <Select value={form.tipo} onChange={set('tipo')}>
               {Object.values(ROOM_TYPES).map((t) => (
-                <option key={t} value={t}>{t}</option>
+                <option key={t} value={t}>
+                  {t}
+                </option>
               ))}
             </Select>
           </Field>
@@ -237,7 +286,13 @@ function RoomForm({ title, initial, onSubmit, onClose }) {
             <Input type="number" min="1" value={form.tarifa} onChange={set('tarifa')} required />
           </Field>
           <Field label="Capacidad *">
-            <Input type="number" min="1" value={form.capacidad} onChange={set('capacidad')} required />
+            <Input
+              type="number"
+              min="1"
+              value={form.capacidad}
+              onChange={set('capacidad')}
+              required
+            />
           </Field>
           <Field label="Estado">
             <Select value={form.estado} onChange={set('estado')}>
@@ -255,9 +310,13 @@ function RoomForm({ title, initial, onSubmit, onClose }) {
             <Input value={form.fotos} onChange={set('fotos')} />
           </Field>
         </div>
-        <div className="row">
-          <Btn type="submit" variant="primary" disabled={busy}>Guardar</Btn>
-          <Btn onClick={onClose}>Cancelar</Btn>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <Btn type="submit" variant="primary" disabled={busy}>
+            Guardar
+          </Btn>
+          <Btn type="button" onClick={onClose}>
+            Cancelar
+          </Btn>
         </div>
       </form>
     </Card>

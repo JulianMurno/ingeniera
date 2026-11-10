@@ -9,6 +9,9 @@ import Nav from './Nav';
 const STAFF_PATHS = ['/limpieza', '/mantenimiento'];
 const PUBLIC_APP_PATHS = ['/login', '/portal/login', '/portal/registro'];
 
+const CONTAINER_CLASSES =
+  'mx-auto w-full max-w-[1280px] px-4 pt-6 pb-12 [&>*+*]:mt-6 max-[540px]:px-3.5';
+
 function StaffRouteGuard({ children }) {
   const router = useRouter();
   const [authorized, setAuthorized] = useState(false);
@@ -27,8 +30,8 @@ function StaffRouteGuard({ children }) {
 
   if (!ready) {
     return (
-      <main className="container">
-        <p className="muted" aria-live="polite">
+      <main className={CONTAINER_CLASSES}>
+        <p className="text-[13px] text-muted" aria-live="polite">
           Verificando acceso…
         </p>
       </main>
@@ -49,7 +52,7 @@ export default function AppShell({ children }) {
   const shell = (
     <div className={PUBLIC_APP_PATHS.includes(pathname) ? undefined : 'branded-shell'}>
       <Nav />
-      <main className="container">{children}</main>
+      <main className={CONTAINER_CLASSES}>{children}</main>
     </div>
   );
 

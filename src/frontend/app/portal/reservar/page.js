@@ -11,7 +11,9 @@ import {
   Field,
   Input,
   Loading,
+  PageHeader,
   Select,
+  buttonVariants,
   fmtMoney,
   ROOM_TYPES,
 } from '@/components/ui';
@@ -55,7 +57,8 @@ function ReservarContent() {
         checkOut: current.checkOut,
       });
       if (current.type) q.set('type', current.type);
-      if (current.adultos) q.set('ocupantes', String(Number(current.adultos) + Number(current.menores || 0)));
+      if (current.adultos)
+        q.set('ocupantes', String(Number(current.adultos) + Number(current.menores || 0)));
       const res = await api(`/api/v1/availability?${q.toString()}`);
       const list = Array.isArray(res) ? res : res.data || [];
       setRooms(list);
@@ -107,13 +110,15 @@ function ReservarContent() {
         </p>
         <p>
           Habitación {confirmation.room?.numero} · {confirmation.noches} noche(s) · Total{' '}
-          <span className="money">{fmtMoney(confirmation.total)}</span>
+          <span className="font-semibold tabular-nums">{fmtMoney(confirmation.total)}</span>
         </p>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <Link href="/portal/mis-reservas" className="btn btn-primary">
+        <div className="flex flex-wrap gap-2">
+          <Link href="/portal/mis-reservas" className={buttonVariants({ variant: 'primary' })}>
             Ver mis reservas
           </Link>
-          <Btn onClick={() => setConfirmation(null)}>Hacer otra reserva</Btn>
+          <Btn type="button" onClick={() => setConfirmation(null)}>
+            Hacer otra reserva
+          </Btn>
         </div>
       </Card>
     );
@@ -121,18 +126,20 @@ function ReservarContent() {
 
   return (
     <>
-      <div className="spread">
-        <h1>Nueva reserva</h1>
-        <Link href="/portal" className="btn btn-sm">
-          ← Volver
-        </Link>
-      </div>
+      <PageHeader
+        title="Nueva reserva"
+        actions={
+          <Link href="/portal" className={buttonVariants({ size: 'sm' })}>
+            ← Volver
+          </Link>
+        }
+      />
 
       <ErrorMsg error={error} />
 
       <Card title="Fechas y ocupantes">
         <form
-          className="row"
+          className="flex flex-wrap items-end gap-4"
           onSubmit={(e) => {
             e.preventDefault();
             buscar();
@@ -191,7 +198,7 @@ function ReservarContent() {
               ))}
             </Select>
           </Field>
-          <div className="row">
+          <div className="flex flex-wrap items-end gap-4">
             <Field label="Adultos *">
               <Input
                 type="number"
@@ -216,17 +223,14 @@ function ReservarContent() {
               onChange={(e) => setForm((f) => ({ ...f, notas: e.target.value }))}
             />
           </Field>
-          <Btn
-            type="submit"
-            variant="primary"
-            disabled={busy || !form.roomId}
-            style={{ marginTop: 8 }}
-          >
+          <Btn type="submit" variant="primary" disabled={busy || !form.roomId} className="mt-2">
             {busy ? 'Procesando...' : 'Confirmar reserva'}
           </Btn>
         </form>
         {rooms && rooms.length === 0 && (
-          <p className="muted">No hay habitaciones disponibles para esas fechas.</p>
+          <p className="text-[13px] text-muted">
+            No hay habitaciones disponibles para esas fechas.
+          </p>
         )}
         {busy && <Loading />}
       </Card>
@@ -237,7 +241,7 @@ function ReservarContent() {
 export default function GuestReservePage() {
   return (
     <RequireGuest>
-      <Suspense fallback={<p className="muted">Cargando…</p>}>
+      <Suspense fallback={<p className="text-[13px] text-muted">Cargando…</p>}>
         <ReservarContent />
       </Suspense>
     </RequireGuest>

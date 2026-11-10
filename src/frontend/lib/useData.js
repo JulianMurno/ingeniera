@@ -28,8 +28,10 @@ export function useData(source) {
       .then((res) => {
         if (!mounted.current) return;
         setState({
-          data: Array.isArray(res) ? res : res.data,
-          pagination: Array.isArray(res) ? null : res.pagination || null,
+          // Las respuestas de lista llegan como array; las de detalle, como objeto plano.
+          // Sin el fallback, un objeto sin `data` dejaba `data = null` y rompía el detalle.
+          data: Array.isArray(res) ? res : (res?.data ?? res),
+          pagination: Array.isArray(res) ? null : (res?.pagination ?? null),
           raw: res,
           loading: false,
           error: null,

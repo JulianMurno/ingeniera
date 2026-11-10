@@ -21,6 +21,6 @@ export default function RequireGuest({ children }) {
     setReady(true);
   }, [router]);
 
-  if (!ready) return <p className="muted">Cargando…</p>;
+  if (!ready) return <p className="text-[13px] text-muted">Cargando…</p>;
   return children;
 }

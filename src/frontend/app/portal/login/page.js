@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api, setSession } from '@/lib/api';
-import { Btn, ErrorMsg, Field, Input } from '@/components/ui';
+import { Btn, Card, ErrorMsg, Field, Input } from '@/components/ui';
 
 export default function GuestLoginPage() {
   const router = useRouter();
@@ -33,12 +33,14 @@ export default function GuestLoginPage() {
   }
 
   return (
-    <div className="login-wrap">
-      <h1 className="login-title">Mirador del Sol</h1>
-      <div className="card" style={{ boxShadow: 'var(--shadow-lg)' }}>
-        <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <h2 style={{ fontSize: 20, marginBottom: 8 }}>Iniciar Sesión</h2>
-          <p className="muted" style={{ margin: 0 }}>
+    <div className="mx-auto mt-20 w-full max-w-[420px]">
+      <h1 className="mb-8 text-center font-display text-[32px] font-extrabold tracking-[-0.01em] text-primary">
+        Mirador del Sol
+      </h1>
+      <Card className="shadow-lg">
+        <div className="mb-6 text-center">
+          <h2 className="mb-2 font-display text-xl font-semibold">Iniciar Sesión</h2>
+          <p className="m-0 text-[13px] text-muted">
             Consulte disponibilidad y gestione sus reservas
           </p>
         </div>
@@ -49,6 +51,7 @@ export default function GuestLoginPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
               autoFocus
               required
               placeholder="su@email.com"
@@ -59,25 +62,27 @@ export default function GuestLoginPage() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
               required
               placeholder="Ingrese su contraseña"
             />
           </Field>
-          <Btn
-            type="submit"
-            variant="primary"
-            disabled={busy}
-            style={{ width: '100%', marginTop: 8 }}
-          >
+          <Btn type="submit" variant="primary" disabled={busy} className="mt-2 w-full">
             {busy ? 'Ingresando...' : 'Ingresar'}
           </Btn>
         </form>
-        <p className="muted" style={{ marginTop: 16, marginBottom: 0, textAlign: 'center' }}>
-          ¿No tiene cuenta? <Link href="/portal/registro">Regístrese</Link>
+        <p className="mb-0 mt-4 text-center text-[13px] text-muted">
+          ¿No tiene cuenta?{' '}
+          <Link href="/portal/registro" className="font-medium text-primary hover:underline">
+            Regístrese
+          </Link>
         </p>
-      </div>
-      <p className="muted" style={{ marginTop: 16, textAlign: 'center', fontSize: 13 }}>
-        ¿Es personal del hotel? <Link href="/login">Acceso al panel de gestión</Link>
+      </Card>
+      <p className="mt-4 text-center text-[13px] text-muted">
+        ¿Es personal del hotel?{' '}
+        <Link href="/login" className="font-medium text-primary hover:underline">
+          Acceso al panel de gestión
+        </Link>
       </p>
     </div>
   );

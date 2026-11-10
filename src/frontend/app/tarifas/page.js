@@ -10,6 +10,7 @@ import {
   Input,
   Loading,
   Msg,
+  PageHeader,
   Select,
   Table,
   fmtDate,
@@ -23,18 +24,31 @@ export default function TarifasPage() {
   const [tab, setTab] = useState('seasons');
   return (
     <>
-      <h1>Tarifas</h1>
-      <div className="row" style={{ marginBottom: 16 }}>
-        <Btn variant={tab === 'seasons' ? 'primary' : ''} onClick={() => setTab('seasons')}>
-          Temporadas
-        </Btn>
-        <Btn variant={tab === 'weekdays' ? 'primary' : ''} onClick={() => setTab('weekdays')}>
-          Días de semana
-        </Btn>
-        <Btn variant={tab === 'quote' ? 'primary' : ''} onClick={() => setTab('quote')}>
-          Cotización
-        </Btn>
-      </div>
+      <PageHeader
+        title="Tarifas"
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Btn
+              variant={tab === 'seasons' ? 'primary' : 'secondary'}
+              onClick={() => setTab('seasons')}
+            >
+              Temporadas
+            </Btn>
+            <Btn
+              variant={tab === 'weekdays' ? 'primary' : 'secondary'}
+              onClick={() => setTab('weekdays')}
+            >
+              Días de semana
+            </Btn>
+            <Btn
+              variant={tab === 'quote' ? 'primary' : 'secondary'}
+              onClick={() => setTab('quote')}
+            >
+              Cotización
+            </Btn>
+          </div>
+        }
+      />
       {tab === 'seasons' && <Seasons />}
       {tab === 'weekdays' && <Weekdays />}
       {tab === 'quote' && <Quote />}
@@ -83,30 +97,53 @@ function Seasons() {
   }
 
   return (
-    <div className="grid grid-2">
+    <div className="grid gap-5 md:grid-cols-2">
       <Card title="Nueva temporada">
         <ErrorMsg error={err} />
         <Msg>{ok}</Msg>
         <form onSubmit={submit}>
           <Field label="Tipo de habitación">
-            <Select value={form.roomType} onChange={(e) => setForm((f) => ({ ...f, roomType: e.target.value }))}>
+            <Select
+              value={form.roomType}
+              onChange={(e) => setForm((f) => ({ ...f, roomType: e.target.value }))}
+            >
               {Object.values(ROOM_TYPES).map((t) => (
-                <option key={t} value={t}>{t}</option>
+                <option key={t} value={t}>
+                  {t}
+                </option>
               ))}
             </Select>
           </Field>
-          <div className="row">
+          <div className="flex flex-wrap items-end gap-4">
             <Field label="Inicio">
-              <Input type="date" value={form.fechaInicio} onChange={(e) => setForm((f) => ({ ...f, fechaInicio: e.target.value }))} required />
+              <Input
+                type="date"
+                value={form.fechaInicio}
+                onChange={(e) => setForm((f) => ({ ...f, fechaInicio: e.target.value }))}
+                required
+              />
             </Field>
             <Field label="Fin (excluido)">
-              <Input type="date" value={form.fechaFin} onChange={(e) => setForm((f) => ({ ...f, fechaFin: e.target.value }))} required />
+              <Input
+                type="date"
+                value={form.fechaFin}
+                onChange={(e) => setForm((f) => ({ ...f, fechaFin: e.target.value }))}
+                required
+              />
             </Field>
           </div>
           <Field label="Tarifa por noche">
-            <Input type="number" min="1" value={form.tarifa} onChange={(e) => setForm((f) => ({ ...f, tarifa: e.target.value }))} required />
+            <Input
+              type="number"
+              min="1"
+              value={form.tarifa}
+              onChange={(e) => setForm((f) => ({ ...f, tarifa: e.target.value }))}
+              required
+            />
           </Field>
-          <Btn type="submit" variant="primary">Crear</Btn>
+          <Btn type="submit" variant="primary">
+            Crear
+          </Btn>
         </form>
       </Card>
       <Card
@@ -115,7 +152,9 @@ function Seasons() {
           <Select value={filtro} onChange={(e) => setFiltro(e.target.value)}>
             <option value="">Todas</option>
             {Object.values(ROOM_TYPES).map((t) => (
-              <option key={t} value={t}>{t}</option>
+              <option key={t} value={t}>
+                {t}
+              </option>
             ))}
           </Select>
         }
@@ -131,8 +170,12 @@ function Seasons() {
                 <td>{s.roomType}</td>
                 <td>{fmtDate(s.fechaInicio)}</td>
                 <td>{fmtDate(s.fechaFin)}</td>
-                <td className="money">{fmtMoney(s.tarifa)}</td>
-                <td><Btn variant="sm btn-danger" onClick={() => eliminar(s)}>Eliminar</Btn></td>
+                <td className="font-semibold tabular-nums">{fmtMoney(s.tarifa)}</td>
+                <td>
+                  <Btn variant="danger" size="sm" onClick={() => eliminar(s)}>
+                    Eliminar
+                  </Btn>
+                </td>
               </tr>
             ))}
           </Table>
@@ -158,7 +201,11 @@ function Weekdays() {
     try {
       await api('/api/v1/rates/weekdays', {
         method: 'POST',
-        body: { roomType: form.roomType, diaSemana: Number(form.diaSemana), tarifa: Number(form.tarifa) },
+        body: {
+          roomType: form.roomType,
+          diaSemana: Number(form.diaSemana),
+          tarifa: Number(form.tarifa),
+        },
       });
       setOk('Tarifa por día creada.');
       reload();
@@ -178,29 +225,47 @@ function Weekdays() {
   }
 
   return (
-    <div className="grid grid-2">
+    <div className="grid gap-5 md:grid-cols-2">
       <Card title="Nueva tarifa por día">
         <ErrorMsg error={err} />
         <Msg>{ok}</Msg>
         <form onSubmit={submit}>
           <Field label="Tipo de habitación">
-            <Select value={form.roomType} onChange={(e) => setForm((f) => ({ ...f, roomType: e.target.value }))}>
+            <Select
+              value={form.roomType}
+              onChange={(e) => setForm((f) => ({ ...f, roomType: e.target.value }))}
+            >
               {Object.values(ROOM_TYPES).map((t) => (
-                <option key={t} value={t}>{t}</option>
+                <option key={t} value={t}>
+                  {t}
+                </option>
               ))}
             </Select>
           </Field>
           <Field label="Día de la semana">
-            <Select value={form.diaSemana} onChange={(e) => setForm((f) => ({ ...f, diaSemana: e.target.value }))}>
+            <Select
+              value={form.diaSemana}
+              onChange={(e) => setForm((f) => ({ ...f, diaSemana: e.target.value }))}
+            >
               {DIAS.map((d, i) => (
-                <option key={i} value={i}>{d}</option>
+                <option key={i} value={i}>
+                  {d}
+                </option>
               ))}
             </Select>
           </Field>
           <Field label="Tarifa por noche">
-            <Input type="number" min="1" value={form.tarifa} onChange={(e) => setForm((f) => ({ ...f, tarifa: e.target.value }))} required />
+            <Input
+              type="number"
+              min="1"
+              value={form.tarifa}
+              onChange={(e) => setForm((f) => ({ ...f, tarifa: e.target.value }))}
+              required
+            />
           </Field>
-          <Btn type="submit" variant="primary">Crear</Btn>
+          <Btn type="submit" variant="primary">
+            Crear
+          </Btn>
         </form>
       </Card>
       <Card
@@ -209,7 +274,9 @@ function Weekdays() {
           <Select value={filtro} onChange={(e) => setFiltro(e.target.value)}>
             <option value="">Todas</option>
             {Object.values(ROOM_TYPES).map((t) => (
-              <option key={t} value={t}>{t}</option>
+              <option key={t} value={t}>
+                {t}
+              </option>
             ))}
           </Select>
         }
@@ -224,8 +291,12 @@ function Weekdays() {
               <tr key={w.id}>
                 <td>{w.roomType}</td>
                 <td>{DIAS[w.diaSemana]}</td>
-                <td className="money">{fmtMoney(w.tarifa)}</td>
-                <td><Btn variant="sm btn-danger" onClick={() => eliminar(w)}>Eliminar</Btn></td>
+                <td className="font-semibold tabular-nums">{fmtMoney(w.tarifa)}</td>
+                <td>
+                  <Btn variant="danger" size="sm" onClick={() => eliminar(w)}>
+                    Eliminar
+                  </Btn>
+                </td>
               </tr>
             ))}
           </Table>
@@ -262,36 +333,56 @@ function Quote() {
 
   return (
     <Card title="Cotización (tarifa vigente por tipo y rango)">
-      <form onSubmit={consultar} className="row">
+      <form onSubmit={consultar} className="flex flex-wrap items-end gap-4">
         <Field label="Tipo">
-          <Select value={form.roomType} onChange={(e) => setForm((f) => ({ ...f, roomType: e.target.value }))}>
+          <Select
+            value={form.roomType}
+            onChange={(e) => setForm((f) => ({ ...f, roomType: e.target.value }))}
+          >
             {Object.values(ROOM_TYPES).map((t) => (
-              <option key={t} value={t}>{t}</option>
+              <option key={t} value={t}>
+                {t}
+              </option>
             ))}
           </Select>
         </Field>
         <Field label="Check-in">
-          <Input type="date" value={form.checkIn} onChange={(e) => setForm((f) => ({ ...f, checkIn: e.target.value }))} required />
+          <Input
+            type="date"
+            value={form.checkIn}
+            onChange={(e) => setForm((f) => ({ ...f, checkIn: e.target.value }))}
+            required
+          />
         </Field>
         <Field label="Check-out">
-          <Input type="date" value={form.checkOut} onChange={(e) => setForm((f) => ({ ...f, checkOut: e.target.value }))} required />
+          <Input
+            type="date"
+            value={form.checkOut}
+            onChange={(e) => setForm((f) => ({ ...f, checkOut: e.target.value }))}
+            required
+          />
         </Field>
-        <Btn type="submit" variant="primary" disabled={busy}>Cotizar</Btn>
+        <Btn type="submit" variant="primary" disabled={busy}>
+          Cotizar
+        </Btn>
       </form>
       <ErrorMsg error={err} />
       {quote && (
-        <div style={{ marginTop: 8 }}>
+        <div className="mt-2">
           <p>
             <strong>Total ({quote.noches} noches):</strong>{' '}
-            <span className="money">{fmtMoney(quote.total)}</span>
-            <span className="muted"> · tarifa base {fmtMoney(quote.tarifaBase)}</span>
+            <span className="font-semibold tabular-nums">{fmtMoney(quote.total)}</span>
+            <span className="text-[13px] text-muted">
+              {' '}
+              · tarifa base {fmtMoney(quote.tarifaBase)}
+            </span>
           </p>
           <Table headers={['Fecha', 'Día', 'Tarifa', 'Origen']} empty="">
             {(quote.detalle || []).map((n, i) => (
               <tr key={i}>
                 <td>{fmtDate(n.fecha)}</td>
                 <td>{n.dia}</td>
-                <td className="money">{fmtMoney(n.tarifa)}</td>
+                <td className="font-semibold tabular-nums">{fmtMoney(n.tarifa)}</td>
                 <td>{n.origen}</td>
               </tr>
             ))}

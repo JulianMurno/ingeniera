@@ -8,26 +8,13 @@ import {
   Card,
   ErrorMsg,
   Loading,
+  PageHeader,
+  StatCard,
   Table,
+  buttonVariants,
   fmtDate,
   fmtMoney,
 } from '@/components/ui';
-
-function Stat({ href, label, value, icon }) {
-  return (
-    <Link href={href} className="stat-link">
-      <Card>
-        <div className="stat" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          {icon && <div style={{ fontSize: 32 }}>{icon}</div>}
-          <div>
-            <div className="stat-value">{value}</div>
-            <div className="stat-label">{label}</div>
-          </div>
-        </div>
-      </Card>
-    </Link>
-  );
-}
 
 export default function Dashboard() {
   const [state, setState] = useState({ loading: true, error: null, health: null, reservas: null });
@@ -55,36 +42,41 @@ export default function Dashboard() {
 
   return (
     <>
-      <div className="spread">
-        <div>
-          <h1 style={{ marginBottom: 8 }}>Panel de Control</h1>
-          <p className="muted" style={{ margin: 0 }}>Gestión integral del hotel</p>
-        </div>
-        {state.health && (
-          <div className="spread" style={{ gap: 12, padding: '8px 16px', background: 'var(--card)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)' }}>
-            <span className="muted" style={{ fontSize: 13 }}>Sistema</span>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <Badge kind={state.health.status === 'ok' ? 'ok' : 'down'} />
-              <span className="muted" style={{ fontSize: 13 }}>API</span>
+      <PageHeader
+        title="Panel de Control"
+        description="Gestión integral del hotel"
+        actions={
+          state.health && (
+            <div className="flex items-center gap-4 rounded-control border border-border bg-surface px-4 py-2 shadow-card">
+              <span className="text-[13px] text-muted">Sistema</span>
+              <span className="flex items-center gap-2 text-[13px] text-muted">
+                <Badge kind={state.health.status === 'ok' ? 'ok' : 'down'} />
+                API
+              </span>
+              <span className="flex items-center gap-2 text-[13px] text-muted">
+                <Badge kind={state.health.db === 'ok' ? 'ok' : 'down'} />
+                BD
+              </span>
             </div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <Badge kind={state.health.db === 'ok' ? 'ok' : 'down'} />
-              <span className="muted" style={{ fontSize: 13 }}>BD</span>
-            </div>
-          </div>
-        )}
-      </div>
+          )
+        }
+      />
 
-      <div className="grid grid-3">
-        <Stat href="/reservas" label="Reservas totales" value={pagination?.total ?? '—'} icon="📅" />
-        <Stat href="/huespedes" label="Huéspedes" value={'—'} icon="👥" />
-        <Stat href="/habitaciones" label="Habitaciones" value={'—'} icon="🛏️" />
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <StatCard
+          href="/reservas"
+          label="Reservas totales"
+          value={pagination?.total ?? '—'}
+          icon="📅"
+        />
+        <StatCard href="/huespedes" label="Huéspedes" value="—" icon="👥" />
+        <StatCard href="/habitaciones" label="Habitaciones" value="—" icon="🛏️" />
       </div>
 
       <Card
         title="Últimas reservas"
         actions={
-          <Link href="/reservas" className="btn btn-primary btn-sm">
+          <Link href="/reservas" className={buttonVariants({ variant: 'primary', size: 'sm' })}>
             Ver todas →
           </Link>
         }
@@ -96,16 +88,19 @@ export default function Dashboard() {
           {(state.reservas?.data || []).map((r) => (
             <tr key={r.id}>
               <td>
-                <Link href={`/reservas/${r.id}`} style={{ color: 'var(--primary)', fontWeight: 600, textDecoration: 'none' }}>
+                <Link
+                  href={`/reservas/${r.id}`}
+                  className="font-semibold text-primary no-underline hover:text-primary-dark"
+                >
                   {r.codigo || `#${r.id}`}
                 </Link>
               </td>
-              <td style={{ fontWeight: 500 }}>{r.guest?.nombre || r.guestId}</td>
+              <td className="font-medium">{r.guest?.nombre || r.guestId}</td>
               <td>{r.room?.numero || r.roomId}</td>
-              <td className="muted">
+              <td className="text-[13px] text-muted">
                 {fmtDate(r.checkIn)} → {fmtDate(r.checkOut)}
               </td>
-              <td className="money">{fmtMoney(r.total)}</td>
+              <td className="font-semibold tabular-nums">{fmtMoney(r.total)}</td>
               <td>
                 <Badge kind={r.estado} />
               </td>

@@ -10,6 +10,7 @@ import {
   Field,
   Input,
   Loading,
+  PageHeader,
   Pager,
   Select,
   Table,
@@ -66,12 +67,14 @@ export default function MantenimientoPage() {
 
   return (
     <>
-      <div className="spread">
-        <h1>Mantenimiento</h1>
-        <Btn variant="primary" onClick={() => setCreating(true)}>
-          + Reportar incidencia
-        </Btn>
-      </div>
+      <PageHeader
+        title="Mantenimiento"
+        actions={
+          <Btn variant="primary" onClick={() => setCreating(true)}>
+            + Reportar incidencia
+          </Btn>
+        }
+      />
 
       {creating && (
         <TicketForm
@@ -83,7 +86,7 @@ export default function MantenimientoPage() {
       )}
 
       <Card title="Filtros">
-        <div className="row">
+        <div className="flex flex-wrap items-end gap-4">
           <Field label="Estado">
             <Select value={filtros.estado} onChange={setFiltro('estado')}>
               <option value="">Todos</option>
@@ -147,25 +150,30 @@ export default function MantenimientoPage() {
                 <td>{t.prioridad}</td>
                 <td>
                   {t.descripcion}
-                  {t.resolucion && <div className="muted">Resolución: {t.resolucion}</div>}
+                  {t.resolucion && (
+                    <div className="text-[13px] text-muted">Resolución: {t.resolucion}</div>
+                  )}
                 </td>
                 <td>{t.reportadoPor?.username || '—'}</td>
                 <td>{fmtDateTime(t.creadoEn)}</td>
                 <td>
                   <Badge kind={t.estado} />
                 </td>
-                <td className="row">
-                  {(TRANSICIONES[t.estado] || [])
-                    .filter((s) => s !== 'CANCELADO' || admin)
-                    .map((s) => (
-                      <Btn
-                        key={s}
-                        variant={s === 'CANCELADO' ? 'sm btn-danger' : 'sm'}
-                        onClick={() => cambiarEstado(t, s)}
-                      >
-                        {s}
-                      </Btn>
-                    ))}
+                <td>
+                  <div className="flex flex-wrap gap-2">
+                    {(TRANSICIONES[t.estado] || [])
+                      .filter((s) => s !== 'CANCELADO' || admin)
+                      .map((s) => (
+                        <Btn
+                          key={s}
+                          size="sm"
+                          variant={s === 'CANCELADO' ? 'danger' : 'secondary'}
+                          onClick={() => cambiarEstado(t, s)}
+                        >
+                          {s}
+                        </Btn>
+                      ))}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -179,7 +187,12 @@ export default function MantenimientoPage() {
 
 function TicketForm({ onClose }) {
   const rooms = useData('/api/v1/rooms?pageSize=100');
-  const [form, setForm] = useState({ roomId: '', tipo: 'AVERIA', prioridad: 'MEDIA', descripcion: '' });
+  const [form, setForm] = useState({
+    roomId: '',
+    tipo: 'AVERIA',
+    prioridad: 'MEDIA',
+    descripcion: '',
+  });
   const [err, setErr] = useState(null);
   const [busy, setBusy] = useState(false);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -205,7 +218,7 @@ function TicketForm({ onClose }) {
     <Card title="Reportar incidencia">
       <ErrorMsg error={err || rooms.error} />
       <form onSubmit={submit}>
-        <div className="grid grid-2">
+        <div className="grid gap-5 md:grid-cols-2">
           <Field label="Habitación *">
             <Select value={form.roomId} onChange={set('roomId')} required>
               <option value="">Elegir…</option>
@@ -238,7 +251,7 @@ function TicketForm({ onClose }) {
             <Input value={form.descripcion} onChange={set('descripcion')} required />
           </Field>
         </div>
-        <div className="row">
+        <div className="mt-2 flex flex-wrap gap-2">
           <Btn type="submit" variant="primary" disabled={busy}>
             Guardar
           </Btn>

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { api, setSession } from '@/lib/api';
-import { Btn, ErrorMsg, Field, Input } from '@/components/ui';
+import { Btn, Card, ErrorMsg, Field, Input } from '@/components/ui';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -32,12 +32,14 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="login-wrap">
-      <h1 className="login-title">Mirador del Sol</h1>
-      <div className="card" style={{ boxShadow: 'var(--shadow-lg)' }}>
-        <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <h2 style={{ fontSize: 20, marginBottom: 8 }}>Iniciar Sesión</h2>
-          <p className="muted" style={{ margin: 0 }}>Acceda al panel de gestión</p>
+    <div className="mx-auto mt-12 w-full max-w-[440px] max-[720px]:mt-4">
+      <h1 className="mb-6 text-center font-display text-[32px] font-bold tracking-[-0.01em]">
+        Mirador del Sol
+      </h1>
+      <Card className="shadow-modal">
+        <div className="mb-6 text-center">
+          <h2 className="mb-2 font-display text-xl font-semibold">Iniciar Sesión</h2>
+          <p className="m-0 text-[13px] text-muted">Acceda al panel de gestión</p>
         </div>
         <ErrorMsg error={error} />
         <form onSubmit={onSubmit}>
@@ -47,6 +49,7 @@ export default function LoginPage() {
               onChange={(e) => setUsername(e.target.value)}
               autoFocus
               required
+              autoComplete="username"
               placeholder="Ingrese su usuario"
             />
           </Field>
@@ -56,17 +59,29 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              autoComplete="current-password"
               placeholder="Ingrese su contraseña"
             />
           </Field>
-          <Btn type="submit" variant="primary" disabled={busy} style={{ width: '100%', marginTop: 8 }}>
+          <Btn type="submit" variant="primary" disabled={busy} className="mt-2 w-full">
             {busy ? 'Ingresando...' : 'Ingresar'}
           </Btn>
         </form>
-      </div>
-      <div style={{ textAlign: 'center', marginTop: 16, padding: 12, background: '#f8fafc', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>
-        <p className="muted" style={{ margin: 0, fontSize: 13 }}>
-          Usuarios de prueba: <code style={{ background: '#e2e8f0', padding: '2px 6px', borderRadius: 4 }}>admin</code> / <code style={{ background: '#e2e8f0', padding: '2px 6px', borderRadius: 4 }}>recepcionista</code> • Contraseña: <code style={{ background: '#e2e8f0', padding: '2px 6px', borderRadius: 4 }}>123456</code>
+      </Card>
+      <div className="mt-4 rounded-card border border-border bg-background-alt p-3 text-center">
+        <p className="m-0 text-[13px] text-muted">
+          Usuarios de prueba:{' '}
+          <code className="rounded-[3px] bg-surface-strong px-1.5 py-0.5 font-mono text-xs">
+            admin
+          </code>{' '}
+          /{' '}
+          <code className="rounded-[3px] bg-surface-strong px-1.5 py-0.5 font-mono text-xs">
+            recepcionista
+          </code>{' '}
+          • Contraseña:{' '}
+          <code className="rounded-[3px] bg-surface-strong px-1.5 py-0.5 font-mono text-xs">
+            123456
+          </code>
         </p>
       </div>
     </div>

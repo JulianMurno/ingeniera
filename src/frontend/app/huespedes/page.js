@@ -10,6 +10,7 @@ import {
   Input,
   Loading,
   Msg,
+  PageHeader,
   Pager,
   Table,
 } from '@/components/ui';
@@ -42,25 +43,39 @@ export default function HuespedesPage() {
 
   return (
     <>
-      <div className="spread">
-        <h1>Huéspedes</h1>
-        <Btn variant="primary" onClick={() => { setCreating(true); setEditing(null); }}>
-          + Nuevo huésped
-        </Btn>
-      </div>
+      <PageHeader
+        title="Huéspedes"
+        actions={
+          <Btn
+            variant="primary"
+            onClick={() => {
+              setCreating(true);
+              setEditing(null);
+            }}
+          >
+            + Nuevo huésped
+          </Btn>
+        }
+      />
 
       <Card title="Filtros">
-        <div className="row">
+        <div className="flex flex-wrap items-end gap-4">
           <Field label="DNI">
             <Input
               value={filtros.dni}
-              onChange={(e) => { setFiltros((f) => ({ ...f, dni: e.target.value })); setPage(1); }}
+              onChange={(e) => {
+                setFiltros((f) => ({ ...f, dni: e.target.value }));
+                setPage(1);
+              }}
             />
           </Field>
           <Field label="Nombre">
             <Input
               value={filtros.nombre}
-              onChange={(e) => { setFiltros((f) => ({ ...f, nombre: e.target.value })); setPage(1); }}
+              onChange={(e) => {
+                setFiltros((f) => ({ ...f, nombre: e.target.value }));
+                setPage(1);
+              }}
             />
           </Field>
         </div>
@@ -71,7 +86,10 @@ export default function HuespedesPage() {
           title="Nuevo huésped"
           initial={FORM_VACIO}
           onSubmit={async (body) => api('/api/v1/guests', { method: 'POST', body })}
-          onClose={() => { setCreating(false); reload(); }}
+          onClose={() => {
+            setCreating(false);
+            reload();
+          }}
         />
       )}
       {editing && (
@@ -79,7 +97,10 @@ export default function HuespedesPage() {
           title={`Editar huésped #${editing.id}`}
           initial={editing}
           onSubmit={async (body) => api(`/api/v1/guests/${editing.id}`, { method: 'PATCH', body })}
-          onClose={() => { setEditing(null); reload(); }}
+          onClose={() => {
+            setEditing(null);
+            reload();
+          }}
         />
       )}
 
@@ -96,13 +117,21 @@ export default function HuespedesPage() {
                 <td>{g.dni}</td>
                 <td>{g.email}</td>
                 <td>{g.telefono || '—'}</td>
-                <td className="spread">
-                  <Btn variant="sm" onClick={() => { setEditing(g); setCreating(false); }}>
-                    Editar
-                  </Btn>
-                  <Btn variant="sm btn-danger" onClick={() => archivar(g)}>
-                    Archivar
-                  </Btn>
+                <td>
+                  <div className="flex flex-wrap gap-2">
+                    <Btn
+                      size="sm"
+                      onClick={() => {
+                        setEditing(g);
+                        setCreating(false);
+                      }}
+                    >
+                      Editar
+                    </Btn>
+                    <Btn variant="danger" size="sm" onClick={() => archivar(g)}>
+                      Archivar
+                    </Btn>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -149,7 +178,7 @@ function GuestForm({ title, initial, onSubmit, onClose }) {
       <ErrorMsg error={err} />
       <Msg>{ok}</Msg>
       <form onSubmit={submit}>
-        <div className="grid grid-2">
+        <div className="grid gap-4 md:grid-cols-2">
           <Field label="Nombre *">
             <Input value={form.nombre} onChange={set('nombre')} required />
           </Field>
@@ -163,11 +192,13 @@ function GuestForm({ title, initial, onSubmit, onClose }) {
             <Input value={form.telefono} onChange={set('telefono')} />
           </Field>
         </div>
-        <div className="row">
+        <div className="mt-2 flex flex-wrap gap-2">
           <Btn type="submit" variant="primary" disabled={busy}>
             Guardar
           </Btn>
-          <Btn onClick={onClose}>Cancelar</Btn>
+          <Btn type="button" onClick={onClose}>
+            Cancelar
+          </Btn>
         </div>
       </form>
     </Card>

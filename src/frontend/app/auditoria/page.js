@@ -8,6 +8,7 @@ import {
   Field,
   Input,
   Loading,
+  PageHeader,
   Pager,
   Select,
   Table,
@@ -16,7 +17,13 @@ import {
 import { useData } from '@/lib/useData';
 
 export default function AuditoriaPage() {
-  const [filtros, setFiltros] = useState({ userId: '', accion: '', recurso: '', desde: '', hasta: '' });
+  const [filtros, setFiltros] = useState({
+    userId: '',
+    accion: '',
+    recurso: '',
+    desde: '',
+    hasta: '',
+  });
   const [page, setPage] = useState(1);
 
   const params = new URLSearchParams({ page, pageSize: 10 });
@@ -30,9 +37,9 @@ export default function AuditoriaPage() {
 
   return (
     <>
-      <h1>Auditoría</h1>
+      <PageHeader title="Auditoría" />
       <Card title="Filtros">
-        <div className="row">
+        <div className="flex flex-wrap items-end gap-4">
           <Field label="ID de usuario">
             <Input type="number" min="1" value={filtros.userId} onChange={set('userId')} />
           </Field>
@@ -75,16 +82,12 @@ export default function AuditoriaPage() {
             {(data || []).map((a) => (
               <tr key={a.id}>
                 <td>{fmtDateTime(a.createdAt)}</td>
-                <td>
-                  {a.user ? `${a.user.username} (${a.user.rol})` : `#${a.userId}`}
-                </td>
+                <td>{a.user ? `${a.user.username} (${a.user.rol})` : `#${a.userId}`}</td>
                 <td>{a.accion}</td>
                 <td>{a.recurso}</td>
                 <td>{a.recursoId || '—'}</td>
-                <td style={{ maxWidth: 360 }}>
-                  <code className="muted" style={{ fontSize: 12, wordBreak: 'break-word' }}>
-                    {a.detalle || '—'}
-                  </code>
+                <td className="max-w-[360px]">
+                  <code className="break-words text-xs text-muted">{a.detalle || '—'}</code>
                 </td>
               </tr>
             ))}

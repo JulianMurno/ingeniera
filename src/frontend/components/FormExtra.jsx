@@ -61,7 +61,7 @@ export default function FormExtra({ initial, onDone, onCancel }) {
     <form onSubmit={onSubmit}>
       <ErrorMsg error={error} />
       <Msg>{ok}</Msg>
-      <div className="grid grid-2">
+      <div className="grid gap-5 md:grid-cols-2">
         <Field label="Código *">
           <Input
             value={form.codigo}
@@ -105,7 +105,7 @@ export default function FormExtra({ initial, onDone, onCancel }) {
           <Input value={form.descripcion} onChange={(e) => set('descripcion', e.target.value)} />
         </Field>
       </div>
-      <div className="row">
+      <div className="mt-2 flex flex-wrap gap-2">
         <Btn type="submit" variant="primary" disabled={busy}>
           {editing ? 'Guardar cambios' : 'Crear servicio'}
         </Btn>
