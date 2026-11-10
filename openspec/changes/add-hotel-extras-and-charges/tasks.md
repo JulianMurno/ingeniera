@@ -25,10 +25,10 @@
 ## 4. Reporte de consumo e integración
 
 - [x] 4.1 Implementar `GET /extras/consumo?desde=&hasta=` con importe por servicio y total del período, excluyendo cargos anulados; verificar tests `200`, `422` para rango inválido y que un cargo anulado no sume.
-- [ ] 4.2 (Opcional, solo si `add-cross-cutting-features` ya está mergeado) desglosar `totalEstadia` y `totalServicios` en `GET /reservations/{id}/invoices`; verificar test que comprueba el desglose. Si no está mergeado, dejarlo anotado en el README como punto de integración pendiente.
-- [ ] 4.3 (Opcional, solo si `add-cross-cutting-features` ya está mergeado) llamar `audit()` al registrar y anular un cargo; verificar un test de auditoría. Si no está mergeado, omitir la tarea.
+- [x] 4.2 (Opcional, solo si `add-cross-cutting-features` ya está mergeado) desglosar `totalEstadia` y `totalServicios` en `GET /reservations/{id}/invoices`; verificar test que comprueba el desglose. Si no está mergeado, dejarlo anotado en el README como punto de integración pendiente. — Hecho: `payment.service.buildInvoice` usa `extras.service.resumenCargos` y agrega `totalEstadia`, `totalServicios` y `totalGeneral`; `tests/integration/extras.test.js` › "Factura con desglose de servicios" verifica el desglose y la exclusión de cargos anulados.
+- [x] 4.3 (Opcional, solo si `add-cross-cutting-features` ya está mergeado) llamar `audit()` al registrar y anular un cargo; verificar un test de auditoría. Si no está mergeado, omitir la tarea. — Hecho: `extras.service` audita con recurso `CARGO` (acciones `CREAR` y `CANCELAR`); `tests/integration/extras.test.js` › "Auditoría de cargos" verifica ambos registros.
 
 ## 5. Cierre
 
 - [x] 5.1 Documentar en `src/docs/index.js` el catálogo, los endpoints de cargos, el reporte de consumo y el parámetro `?incluirCargos`; verificar que `/api/docs` los refleja.
-- [x] 5.2 Actualizar README con el flujo de consumo (registrar → anular → facturar) y el punto de integración pendiente con la factura; verificar que `npm run lint`, `npm test` y `npm run build` corren en verde.
+- [x] 5.2 Actualizar README con el flujo de consumo (registrar → anular → facturar) y el desglose de la factura; verificar que `npm run lint`, `npm test` y `npm run build` corren en verde.

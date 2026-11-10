@@ -20,7 +20,7 @@
 - [x] 3.1 Aplicar estancia mínima y máxima en `availability.service` y en la creación/modificación de reservas (`422`); verificar tests de estancia menor al mínimo y mayor al máximo.
 - [x] 3.2 Añadir filtro de disponibilidad por cantidad de ocupantes contra `Room.capacidad`; verificar test que excluye habitaciones de capacidad insuficiente.
 - [x] 3.3 Extender el predicado de solapamiento para considerar `CHECK_IN_HOUR`/`CHECK_OUT_HOUR` (early check-in y late check-out en el día compartido) preservando el recambio el mismo día; verificar tests de early/late y de recambio normal permitido.
-- [ ] 3.4 Verificar que las reglas de antelación/duración configuradas se comparten con `extend-reservations-lifecycle` (mismas env) y que los tests de ambos módulos pasan juntos.
+- [x] 3.4 Verificar que las reglas de antelación/duración configuradas se comparten con `extend-reservations-lifecycle` (mismas env) y que los tests de ambos módulos pasan juntos. — Hecho: disponibilidad y reservas consumen el mismo módulo `src/config/availabilityRules.js` (`MIN_STAY_NIGHTS`, `MAX_STAY_NIGHTS`, `MIN_ADVANCE_NIGHTS`, `CHECK_IN_HOUR`, `CHECK_OUT_HOUR`); `availability`, `reservations`, `guest-reservations`, `availabilityRules` y `business` corren juntos en verde (5 suites / 104 tests).
 
 ## 4. Cierre
 

@@ -94,7 +94,8 @@ const spec = {
         '(sin pasarela): `monto` entero en la unidad base, `metodo` y `pagadoEn`. El estado de pago ' +
         'de la reserva (`PENDIENTE`, `PARCIAL`, `PAGADA`) y el saldo pendiente se derivan de la suma ' +
         'de sus pagos al consultar el detalle; no hay columna persistida. La factura se genera bajo ' +
-        'demanda a partir de la reserva y sus pagos (numeración local, sin tabla `Invoice`).',
+        'demanda a partir de la reserva y sus pagos (numeración local, sin tabla `Invoice`) y ' +
+        'desglosa `totalEstadia`, `totalServicios` y `totalGeneral`.',
     },
     {
       name: 'Reportes',
@@ -114,8 +115,9 @@ const spec = {
     {
       name: 'Auditoría',
       description:
-        'Trazabilidad de operaciones sensibles: creación, modificación y cancelación de reservas y ' +
-        'gestión de habitaciones y usuarios, con autor, acción, recurso, fecha y detalle en JSON. ' +
+        'Trazabilidad de operaciones sensibles: creación, modificación y cancelación de reservas, ' +
+        'gestión de habitaciones y usuarios, transiciones de limpieza, tickets de mantenimiento y ' +
+        'alta/anulación de cargos de servicios, con autor, acción, recurso, fecha y detalle en JSON. ' +
         'La consulta es exclusiva del rol `ADMINISTRADOR` y admite filtros por usuario, acción, ' +
         'recurso y rango de fechas, con paginación.',
     },
@@ -1509,7 +1511,8 @@ const spec = {
         summary: 'Genera la factura de una reserva',
         description:
           'Documento derivado (no persistido) armado con la estancia, la tarifa de la habitación, ' +
-          'el total, los pagos registrados, el total pagado y el saldo pendiente. La numeración es ' +
+          'el total, los pagos registrados, el total pagado y el saldo pendiente. Desglosa ' +
+          '`totalEstadia`, `totalServicios` (cargos no anulados) y `totalGeneral`. La numeración es ' +
           'local (`FAC-<código de la reserva>`) y no sigue una secuencia regulada.',
         security: [{ bearerAuth: [] }],
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
@@ -1673,7 +1676,10 @@ const spec = {
           {
             name: 'recurso',
             in: 'query',
-            schema: { type: 'string', enum: ['RESERVA', 'HABITACION', 'USUARIO'] },
+            schema: {
+              type: 'string',
+              enum: ['RESERVA', 'HABITACION', 'USUARIO', 'HOUSEKEEPING', 'MANTENIMIENTO', 'CARGO'],
+            },
           },
           { name: 'desde', in: 'query', schema: { type: 'string', format: 'date' } },
           { name: 'hasta', in: 'query', schema: { type: 'string', format: 'date' } },
@@ -2558,7 +2564,16 @@ const spec = {
             },
           },
           tarifaPromedioPorNoche: { type: 'integer' },
-          total: { type: 'integer' },
+          total: { type: 'integer', description: 'Costo de la estadía (`Reservation.total`)' },
+          totalEstadia: { type: 'integer', description: 'Costo de la estadía (`Reservation.total`)' },
+          totalServicios: {
+            type: 'integer',
+            description: 'Suma de los cargos de servicios no anulados',
+          },
+          totalGeneral: {
+            type: 'integer',
+            description: '`totalEstadia + totalServicios`',
+          },
           pagos: { type: 'array', items: { $ref: '#/components/schemas/Payment' } },
           totalPagado: { type: 'integer' },
           saldoPendiente: { type: 'integer' },
@@ -2635,7 +2650,10 @@ const spec = {
           id: { type: 'integer' },
           userId: { type: 'integer' },
           accion: { type: 'string', enum: ['CREAR', 'MODIFICAR', 'CANCELAR', 'ELIMINAR'] },
-          recurso: { type: 'string', enum: ['RESERVA', 'HABITACION', 'USUARIO'] },
+          recurso: {
+            type: 'string',
+            enum: ['RESERVA', 'HABITACION', 'USUARIO', 'HOUSEKEEPING', 'MANTENIMIENTO', 'CARGO'],
+          },
           recursoId: { type: 'string', nullable: true },
           detalle: {
             type: 'string',
