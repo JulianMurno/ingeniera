@@ -10,6 +10,7 @@ import {
   ErrorMsg,
   Field,
   Loading,
+  PageHeader,
   Pager,
   Select,
   Table,
@@ -55,19 +56,30 @@ export default function CatalogoPage() {
 
   return (
     <>
-      <div className="spread">
-        <h1>Servicios adicionales</h1>
-        {admin && (
-          <Btn variant="primary" onClick={() => { setCreating(true); setEditing(null); }}>
-            + Nuevo servicio
-          </Btn>
-        )}
-      </div>
+      <PageHeader
+        title="Servicios adicionales"
+        actions={
+          admin && (
+            <Btn
+              variant="primary"
+              onClick={() => {
+                setCreating(true);
+                setEditing(null);
+              }}
+            >
+              + Nuevo servicio
+            </Btn>
+          )
+        }
+      />
 
       {admin && creating && (
         <Card title="Nuevo servicio">
           <FormExtra
-            onDone={() => { setCreating(false); reload(); }}
+            onDone={() => {
+              setCreating(false);
+              reload();
+            }}
             onCancel={() => setCreating(false)}
           />
         </Card>
@@ -76,14 +88,17 @@ export default function CatalogoPage() {
         <Card title={`Editar ${editing.codigo}`}>
           <FormExtra
             initial={editing}
-            onDone={() => { setEditing(null); reload(); }}
+            onDone={() => {
+              setEditing(null);
+              reload();
+            }}
             onCancel={() => setEditing(null)}
           />
         </Card>
       )}
 
       <Card title="Filtros">
-        <div className="row">
+        <div className="flex flex-wrap items-end gap-4">
           <Field label="Categoría">
             <Select value={filtros.categoria} onChange={setFiltro('categoria')}>
               <option value="">Todas</option>
@@ -123,27 +138,37 @@ export default function CatalogoPage() {
                 <td>{extra.codigo}</td>
                 <td>
                   {extra.nombre}
-                  {extra.descripcion && <div className="muted">{extra.descripcion}</div>}
+                  {extra.descripcion && (
+                    <div className="text-[13px] text-muted">{extra.descripcion}</div>
+                  )}
                 </td>
                 <td>{CATEGORIA_LABEL[extra.categoria] || extra.categoria}</td>
-                <td className="money">{fmtMoney(extra.precio)}</td>
+                <td className="font-semibold tabular-nums">{fmtMoney(extra.precio)}</td>
                 <td>{UNIDAD_LABEL[extra.unidad] || extra.unidad}</td>
                 <td>
                   <Badge kind={extra.activo ? 'ACTIVO' : 'INACTIVO'} />
                 </td>
-                <td className="spread">
-                  {admin && (
-                    <>
-                      <Btn variant="sm" onClick={() => { setEditing(extra); setCreating(false); }}>
-                        Editar
-                      </Btn>
-                      {extra.activo && (
-                        <Btn variant="sm btn-danger" onClick={() => darDeBaja(extra)}>
-                          Dar de baja
+                <td>
+                  <div className="flex flex-wrap gap-2">
+                    {admin && (
+                      <>
+                        <Btn
+                          size="sm"
+                          onClick={() => {
+                            setEditing(extra);
+                            setCreating(false);
+                          }}
+                        >
+                          Editar
                         </Btn>
-                      )}
-                    </>
-                  )}
+                        {extra.activo && (
+                          <Btn variant="danger" size="sm" onClick={() => darDeBaja(extra)}>
+                            Dar de baja
+                          </Btn>
+                        )}
+                      </>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

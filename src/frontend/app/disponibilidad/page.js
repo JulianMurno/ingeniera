@@ -10,8 +10,10 @@ import {
   Field,
   Input,
   Loading,
+  PageHeader,
   Select,
   Table,
+  buttonVariants,
   fmtMoney,
   ROOM_TYPES,
 } from '@/components/ui';
@@ -47,42 +49,70 @@ export default function DisponibilidadPage() {
 
   return (
     <>
-      <h1>Disponibilidad</h1>
+      <PageHeader title="Disponibilidad" />
       <Card title="Buscar habitaciones libres">
-        <form onSubmit={consultar} className="row">
+        <form onSubmit={consultar} className="flex flex-wrap items-end gap-4">
           <Field label="Check-in *">
-            <Input type="date" value={form.checkIn} onChange={(e) => setForm((f) => ({ ...f, checkIn: e.target.value }))} required />
+            <Input
+              type="date"
+              value={form.checkIn}
+              onChange={(e) => setForm((f) => ({ ...f, checkIn: e.target.value }))}
+              required
+            />
           </Field>
           <Field label="Check-out *">
-            <Input type="date" value={form.checkOut} onChange={(e) => setForm((f) => ({ ...f, checkOut: e.target.value }))} required />
+            <Input
+              type="date"
+              value={form.checkOut}
+              onChange={(e) => setForm((f) => ({ ...f, checkOut: e.target.value }))}
+              required
+            />
           </Field>
           <Field label="Tipo">
-            <Select value={form.type} onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}>
+            <Select
+              value={form.type}
+              onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
+            >
               <option value="">Todos</option>
               {Object.values(ROOM_TYPES).map((t) => (
-                <option key={t} value={t}>{t}</option>
+                <option key={t} value={t}>
+                  {t}
+                </option>
               ))}
             </Select>
           </Field>
           <Field label="Ocupantes">
-            <Input type="number" min="1" value={form.ocupantes} onChange={(e) => setForm((f) => ({ ...f, ocupantes: e.target.value }))} />
+            <Input
+              type="number"
+              min="1"
+              value={form.ocupantes}
+              onChange={(e) => setForm((f) => ({ ...f, ocupantes: e.target.value }))}
+            />
           </Field>
-          <Btn type="submit" variant="primary" disabled={busy}>Buscar</Btn>
+          <Btn type="submit" variant="primary" disabled={busy}>
+            Buscar
+          </Btn>
         </form>
       </Card>
       <ErrorMsg error={err} />
       {rooms && (
         <Card title={`Libres en el rango (${rooms.length})`}>
-          <Table headers={['Nº', 'Tipo', 'Capacidad', 'Tarifa/noche', 'Disponible', '']} empty="No hay habitaciones libres en el rango">
+          <Table
+            headers={['Nº', 'Tipo', 'Capacidad', 'Tarifa/noche', 'Disponible', '']}
+            empty="No hay habitaciones libres en el rango"
+          >
             {rooms.map((r) => (
               <tr key={r.id}>
                 <td>{r.numero}</td>
                 <td>{r.tipo}</td>
                 <td>{r.capacidad} pax</td>
-                <td className="money">{fmtMoney(r.tarifa)}</td>
+                <td className="font-semibold tabular-nums">{fmtMoney(r.tarifa)}</td>
                 <td>✓</td>
                 <td>
-                  <Link href={`/reservas?dni=&fecha=${form.checkIn}`} className="btn btn-sm">
+                  <Link
+                    href={`/reservas?dni=&fecha=${form.checkIn}`}
+                    className={buttonVariants({ size: 'sm' })}
+                  >
                     Reservar
                   </Link>
                 </td>
@@ -91,7 +121,9 @@ export default function DisponibilidadPage() {
           </Table>
         </Card>
       )}
-      {rooms && rooms.length === 0 && !busy && <p className="muted">Sin resultados para esa búsqueda.</p>}
+      {rooms && rooms.length === 0 && !busy && (
+        <p className="text-[13px] text-muted">Sin resultados para esa búsqueda.</p>
+      )}
       {busy && <Loading />}
     </>
   );

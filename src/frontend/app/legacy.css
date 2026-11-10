@@ -1,0 +1,24 @@
+/*
+ * Base typography that still applies to the branded shell.
+ * Component styling lives in `src/frontend/components/ui/` and page-level
+ * layout in Tailwind utilities. Class-based legacy rules were removed once
+ * every screen migrated to the design system.
+ */
+
+h1 {
+  font-size: 28px;
+  font-weight: 700;
+  margin: 8px 0 24px;
+  letter-spacing: -0.02em;
+}
+
+h2 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.branded-shell :is(h1, h2, h3) {
+  font-family: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif;
+}

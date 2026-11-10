@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api, setSession } from '@/lib/api';
-import { Btn, ErrorMsg, Field, Input } from '@/components/ui';
+import { Btn, Card, ErrorMsg, Field, Input } from '@/components/ui';
 
 const initialForm = {
   nombre: '',
@@ -52,51 +52,64 @@ export default function GuestRegisterPage() {
   }
 
   return (
-    <div className="login-wrap">
-      <h1 className="login-title">Portal de Huéspedes</h1>
-      <div className="card" style={{ boxShadow: 'var(--shadow-lg)' }}>
-        <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <h2 style={{ fontSize: 20, marginBottom: 8 }}>Crear cuenta</h2>
-          <p className="muted" style={{ margin: 0 }}>
+    <div className="mx-auto mt-20 w-full max-w-[420px]">
+      <h1 className="mb-8 text-center font-display text-[32px] font-extrabold tracking-[-0.01em] text-primary">
+        Portal de Huéspedes
+      </h1>
+      <Card className="shadow-lg">
+        <div className="mb-6 text-center">
+          <h2 className="mb-2 font-display text-xl font-semibold">Crear cuenta</h2>
+          <p className="m-0 text-[13px] text-muted">
             Regístrese para reservar y consultar sus reservas
           </p>
         </div>
         <ErrorMsg error={error} />
         <form onSubmit={onSubmit}>
           <Field label="Nombre completo">
-            <Input value={form.nombre} onChange={update('nombre')} required autoFocus />
+            <Input
+              value={form.nombre}
+              onChange={update('nombre')}
+              autoComplete="name"
+              required
+              autoFocus
+            />
           </Field>
           <Field label="Email">
-            <Input type="email" value={form.email} onChange={update('email')} required />
+            <Input
+              type="email"
+              value={form.email}
+              onChange={update('email')}
+              autoComplete="email"
+              required
+            />
           </Field>
           <Field label="DNI">
             <Input value={form.dni} onChange={update('dni')} required />
           </Field>
           <Field label="Teléfono (opcional)">
-            <Input value={form.telefono} onChange={update('telefono')} />
+            <Input value={form.telefono} onChange={update('telefono')} autoComplete="tel" />
           </Field>
           <Field label="Contraseña (mínimo 8 caracteres)">
             <Input
               type="password"
               value={form.password}
               onChange={update('password')}
+              autoComplete="new-password"
               minLength={8}
               required
             />
           </Field>
-          <Btn
-            type="submit"
-            variant="primary"
-            disabled={busy}
-            style={{ width: '100%', marginTop: 8 }}
-          >
+          <Btn type="submit" variant="primary" disabled={busy} className="mt-2 w-full">
             {busy ? 'Creando cuenta...' : 'Crear cuenta'}
           </Btn>
         </form>
-        <p className="muted" style={{ marginTop: 16, marginBottom: 0, textAlign: 'center' }}>
-          ¿Ya tiene cuenta? <Link href="/portal/login">Inicie sesión</Link>
+        <p className="mb-0 mt-4 text-center text-[13px] text-muted">
+          ¿Ya tiene cuenta?{' '}
+          <Link href="/portal/login" className="font-medium text-primary hover:underline">
+            Inicie sesión
+          </Link>
         </p>
-      </div>
+      </Card>
     </div>
   );
 }

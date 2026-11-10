@@ -13,8 +13,10 @@ import {
   Input,
   Loading,
   Msg,
+  PageHeader,
   Select,
   Table,
+  buttonVariants,
   fmtDate,
   fmtDateTime,
   fmtMoney,
@@ -35,7 +37,7 @@ export default function ReservaDetail() {
 
   if (loading) return <Loading />;
   if (error) return <ErrorMsg error={error} />;
-  if (!r) return <p className="muted">Reserva no encontrada</p>;
+  if (!r) return <p className="text-[13px] text-muted">Reserva no encontrada</p>;
 
   async function run(accion, extra = {}) {
     setErr(null);
@@ -56,20 +58,25 @@ export default function ReservaDetail() {
 
   return (
     <>
-      <div className="spread">
-        <h1>
-          Reserva {r.codigo || `#${r.id}`}{' '}
-          <Badge kind={r.estado} /> <Badge kind={r.estadoPago} />
-        </h1>
-        <Link href="/reservas" className="btn btn-sm">
-          ← Volver
-        </Link>
-      </div>
+      <PageHeader
+        title={
+          <span className="flex flex-wrap items-center gap-2">
+            Reserva {r.codigo || `#${r.id}`}
+            <Badge kind={r.estado} />
+            <Badge kind={r.estadoPago} />
+          </span>
+        }
+        actions={
+          <Link href="/reservas" className={buttonVariants({ size: 'sm' })}>
+            ← Volver
+          </Link>
+        }
+      />
 
       <ErrorMsg error={err} />
       <Msg>{msg}</Msg>
 
-      <div className="grid grid-2">
+      <div className="grid gap-4 md:grid-cols-2">
         <Card title="Estancia">
           <Table
             headers={['Campo', 'Valor']}
@@ -101,13 +108,13 @@ export default function ReservaDetail() {
             </tr>
             <tr>
               <td>Total</td>
-              <td className="money">{fmtMoney(r.total)}</td>
+              <td className="font-semibold tabular-nums">{fmtMoney(r.total)}</td>
             </tr>
             <tr>
               <td>Pagado / Saldo</td>
               <td>
-                <span className="money">{fmtMoney(r.totalPagado)}</span> /{' '}
-                <span className="money">{fmtMoney(r.saldoPendiente)}</span>
+                <span className="font-semibold tabular-nums">{fmtMoney(r.totalPagado)}</span> /{' '}
+                <span className="font-semibold tabular-nums">{fmtMoney(r.saldoPendiente)}</span>
               </td>
             </tr>
             {r.notas && (
@@ -145,9 +152,11 @@ export default function ReservaDetail() {
             </Btn>
           )}
           {!transiciones[r.estado] && (
-            <p className="muted">Estado terminal: no hay transiciones disponibles.</p>
+            <p className="text-[13px] text-muted">
+              Estado terminal: no hay transiciones disponibles.
+            </p>
           )}
-          <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <div className="mt-3 flex flex-wrap gap-2">
             <Btn onClick={() => setShowInvoice((v) => !v)}>
               {showInvoice ? 'Ocultar factura' : 'Ver factura'}
             </Btn>
@@ -188,16 +197,16 @@ function CargosCard({ reserva }) {
     <Card title="Servicios adicionales">
       <ErrorMsg error={err || cargos.error || extras.error} />
       {resumen && (
-        <div className="row">
+        <div className="flex flex-wrap items-center gap-4">
           <span>
-            Estadía: <span className="money">{fmtMoney(resumen.totalEstadia)}</span>
+            Estadía: <span className="font-semibold tabular-nums">{fmtMoney(resumen.totalEstadia)}</span>
           </span>
           <span>
-            Servicios: <span className="money">{fmtMoney(resumen.totalServicios)}</span>
+            Servicios: <span className="font-semibold tabular-nums">{fmtMoney(resumen.totalServicios)}</span>
           </span>
           <span>
             <strong>
-              Total general: <span className="money">{fmtMoney(resumen.totalGeneral)}</span>
+              Total general: <span className="font-semibold tabular-nums">{fmtMoney(resumen.totalGeneral)}</span>
             </strong>
           </span>
         </div>
@@ -214,15 +223,15 @@ function CargosCard({ reserva }) {
             <tr key={c.id}>
               <td>
                 {c.extra?.nombre || c.extraId}
-                {c.extra && <div className="muted">{c.extra.codigo}</div>}
+                {c.extra && <div className="text-[13px] text-muted">{c.extra.codigo}</div>}
               </td>
               <td>{c.cantidad}</td>
-              <td className="money">{fmtMoney(c.precioUnitario)}</td>
-              <td className="money">{fmtMoney(c.importe)}</td>
+              <td className="font-semibold tabular-nums">{fmtMoney(c.precioUnitario)}</td>
+              <td className="font-semibold tabular-nums">{fmtMoney(c.importe)}</td>
               <td>
                 <Badge kind={c.estado} />
                 {c.anuladoPor && (
-                  <div className="muted">
+                  <div className="text-[13px] text-muted">
                     por {c.anuladoPor.username} · {fmtDateTime(c.anuladoEn)}
                   </div>
                 )}
@@ -232,7 +241,7 @@ function CargosCard({ reserva }) {
               <td>{c.registradoPor?.username || c.registradoPorId}</td>
               <td>
                 {admin && c.estado !== 'CANCELADO' && (
-                  <Btn variant="sm btn-danger" onClick={() => anular(c)}>
+                  <Btn variant="danger" size="sm" onClick={() => anular(c)}>
                     Anular
                   </Btn>
                 )}
@@ -243,12 +252,12 @@ function CargosCard({ reserva }) {
       )}
 
       {admiteCargos && (
-        <div style={{ marginTop: 12 }}>
+        <div className="mt-3">
           <strong>Registrar cargo</strong>
           {activos.length ? (
             <FormCargo extras={activos} reservationId={reserva.id} onDone={cargos.reload} />
           ) : (
-            <p className="muted">No hay servicios activos en el catálogo.</p>
+            <p className="text-[13px] text-muted">No hay servicios activos en el catálogo.</p>
           )}
         </div>
       )}
@@ -259,7 +268,7 @@ function CargosCard({ reserva }) {
 function CancelForm({ onCancel }) {
   const [motivo, setMotivo] = useState('');
   return (
-    <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+    <div className="flex flex-wrap items-end gap-2">
       <Field label="Motivo de cancelación">
         <Input value={motivo} onChange={(e) => setMotivo(e.target.value)} />
       </Field>
@@ -304,13 +313,13 @@ function PagosCard({ reserva, onChanged }) {
         {(reserva.pagos || []).map((p) => (
           <tr key={p.id}>
             <td>{fmtDate(p.pagadoEn)}</td>
-            <td className="money">{fmtMoney(p.monto)}</td>
+            <td className="font-semibold tabular-nums">{fmtMoney(p.monto)}</td>
             <td>{p.metodo}</td>
             <td>{fmtDateTime(p.createdAt)}</td>
           </tr>
         ))}
       </Table>
-      <form onSubmit={onSubmit} className="row" style={{ marginTop: 12 }}>
+      <form onSubmit={onSubmit} className="mt-3 flex flex-wrap items-end gap-4">
         <Field label="Monto">
           <Input
             type="number"
@@ -352,7 +361,7 @@ function InvoiceCard({ invoice, onRefresh }) {
     <Card
       title={`Factura ${invoice?.numero || ''}`}
       actions={
-        <Btn onClick={onRefresh} variant="sm">
+        <Btn onClick={onRefresh} size="sm">
           Actualizar
         </Btn>
       }
@@ -360,7 +369,7 @@ function InvoiceCard({ invoice, onRefresh }) {
       {!invoice ? (
         <Loading />
       ) : (
-        <div className="grid grid-2">
+        <div className="grid gap-4 md:grid-cols-2">
           <Table
             headers={['Concepto', 'Detalle']}
             empty=""
@@ -387,19 +396,19 @@ function InvoiceCard({ invoice, onRefresh }) {
             </tr>
             <tr>
               <td>Tarifa promedio por noche</td>
-              <td className="money">{fmtMoney(invoice.tarifaPromedioPorNoche)}</td>
+              <td className="font-semibold tabular-nums">{fmtMoney(invoice.tarifaPromedioPorNoche)}</td>
             </tr>
             <tr>
               <td>Total</td>
-              <td className="money">{fmtMoney(invoice.total)}</td>
+              <td className="font-semibold tabular-nums">{fmtMoney(invoice.total)}</td>
             </tr>
             <tr>
               <td>Pagado</td>
-              <td className="money">{fmtMoney(invoice.totalPagado)}</td>
+              <td className="font-semibold tabular-nums">{fmtMoney(invoice.totalPagado)}</td>
             </tr>
             <tr>
               <td>Saldo pendiente</td>
-              <td className="money">{fmtMoney(invoice.saldoPendiente)}</td>
+              <td className="font-semibold tabular-nums">{fmtMoney(invoice.saldoPendiente)}</td>
             </tr>
           </Table>
           <div>
@@ -408,7 +417,7 @@ function InvoiceCard({ invoice, onRefresh }) {
               {(invoice.pagos || []).map((p) => (
                 <tr key={p.id}>
                   <td>{fmtDate(p.pagadoEn)}</td>
-                  <td className="money">{fmtMoney(p.monto)}</td>
+                  <td className="font-semibold tabular-nums">{fmtMoney(p.monto)}</td>
                   <td>{p.metodo}</td>
                 </tr>
               ))}

@@ -10,8 +10,10 @@ import {
   Field,
   Input,
   Loading,
+  PageHeader,
   Select,
   Table,
+  buttonVariants,
   fmtMoney,
   ROOM_TYPES,
 } from '@/components/ui';
@@ -20,7 +22,13 @@ import RequireGuest from '@/components/RequireGuest';
 function addDaysISO(days) {
   const date = new Date();
   date.setDate(date.getDate() + days);
-  return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
+  return (
+    date.getFullYear() +
+    '-' +
+    String(date.getMonth() + 1).padStart(2, '0') +
+    '-' +
+    String(date.getDate()).padStart(2, '0')
+  );
 }
 
 export default function GuestPortalPage() {
@@ -54,15 +62,17 @@ export default function GuestPortalPage() {
 
   return (
     <RequireGuest>
-      <div className="spread">
-        <h1>Mi portal</h1>
-        <Link href="/portal/mis-reservas" className="btn btn-sm">
-          Mis reservas
-        </Link>
-      </div>
+      <PageHeader
+        title="Mi portal"
+        actions={
+          <Link href="/portal/mis-reservas" className={buttonVariants({ size: 'sm' })}>
+            Mis reservas
+          </Link>
+        }
+      />
 
       <Card title="Buscar disponibilidad">
-        <form onSubmit={consultar} className="row">
+        <form onSubmit={consultar} className="flex flex-wrap items-end gap-4">
           <Field label="Check-in *">
             <Input
               type="date"
@@ -121,11 +131,11 @@ export default function GuestPortalPage() {
                 <td>{room.numero}</td>
                 <td>{room.tipo}</td>
                 <td>{room.capacidad} pax</td>
-                <td className="money">{fmtMoney(room.tarifa)}</td>
+                <td className="font-semibold tabular-nums">{fmtMoney(room.tarifa)}</td>
                 <td>
                   <Link
                     href={`/portal/reservar?roomId=${room.id}&checkIn=${form.checkIn}&checkOut=${form.checkOut}`}
-                    className="btn btn-sm btn-primary"
+                    className={buttonVariants({ variant: 'primary', size: 'sm' })}
                   >
                     Reservar
                   </Link>
@@ -137,7 +147,7 @@ export default function GuestPortalPage() {
       )}
 
       {rooms && rooms.length === 0 && !busy && (
-        <p className="muted">Sin resultados para esa búsqueda.</p>
+        <p className="text-[13px] text-muted">Sin resultados para esa búsqueda.</p>
       )}
       {busy && <Loading />}
     </RequireGuest>

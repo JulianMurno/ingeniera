@@ -12,9 +12,11 @@ import {
   Input,
   Loading,
   Msg,
+  PageHeader,
   Pager,
   Select,
   Table,
+  buttonVariants,
   fmtDate,
   fmtMoney,
 } from '@/components/ui';
@@ -36,17 +38,26 @@ export default function ReservasPage() {
 
   return (
     <>
-      <div className="spread">
-        <h1>Reservas</h1>
-        <Btn variant="primary" onClick={() => setShowForm((v) => !v)}>
-          {showForm ? 'Ocultar alta' : '+ Nueva reserva'}
-        </Btn>
-      </div>
+      <PageHeader
+        title="Reservas"
+        actions={
+          <Btn variant="primary" onClick={() => setShowForm((v) => !v)}>
+            {showForm ? 'Ocultar alta' : '+ Nueva reserva'}
+          </Btn>
+        }
+      />
 
-      {showForm && <NuevaReserva onDone={() => { setShowForm(false); reload(); }} />}
+      {showForm && (
+        <NuevaReserva
+          onDone={() => {
+            setShowForm(false);
+            reload();
+          }}
+        />
+      )}
 
       <Card title="Filtros">
-        <div className="row">
+        <div className="flex flex-wrap items-end gap-4">
           <Field label="Fecha (estancia)">
             <Input
               type="date"
@@ -92,7 +103,16 @@ export default function ReservasPage() {
       ) : (
         <Card title="Listado">
           <Table
-            headers={['Código', 'Huésped', 'Habitación', 'Rango', 'Ocupantes', 'Total', 'Estado', '']}
+            headers={[
+              'Código',
+              'Huésped',
+              'Habitación',
+              'Rango',
+              'Ocupantes',
+              'Total',
+              'Estado',
+              '',
+            ]}
             empty="No hay reservas que coincidan"
           >
             {(data || []).map((r) => (
@@ -100,7 +120,7 @@ export default function ReservasPage() {
                 <td>{r.codigo || `#${r.id}`}</td>
                 <td>{r.guest?.nombre || r.guestId}</td>
                 <td>
-                  {r.room?.numero} <span className="muted">({r.room?.tipo})</span>
+                  {r.room?.numero} <span className="text-[13px] text-muted">({r.room?.tipo})</span>
                 </td>
                 <td>
                   {fmtDate(r.checkIn)} → {fmtDate(r.checkOut)}
@@ -108,12 +128,12 @@ export default function ReservasPage() {
                 <td>
                   {r.adultos} + {r.menores}
                 </td>
-                <td className="money">{fmtMoney(r.total)}</td>
+                <td className="font-semibold tabular-nums">{fmtMoney(r.total)}</td>
                 <td>
                   <Badge kind={r.estado} />
                 </td>
                 <td>
-                  <Link href={`/reservas/${r.id}`} className="btn btn-sm">
+                  <Link href={`/reservas/${r.id}`} className={buttonVariants({ size: 'sm' })}>
                     Ver
                   </Link>
                 </td>
@@ -178,7 +198,7 @@ function NuevaReserva({ onDone }) {
       <ErrorMsg error={error} />
       <Msg>{ok}</Msg>
       <form onSubmit={onSubmit}>
-        <div className="grid grid-2">
+        <div className="grid gap-4 md:grid-cols-2">
           <Field label="Huésped">
             <Select value={form.guestId} onChange={set('guestId')} required>
               <option value="">Elegir huésped…</option>
@@ -215,7 +235,7 @@ function NuevaReserva({ onDone }) {
             <Input value={form.notas} onChange={set('notas')} />
           </Field>
         </div>
-        <Btn type="submit" variant="primary" disabled={busy}>
+        <Btn type="submit" variant="primary" disabled={busy} className="mt-2">
           {busy ? 'Guardando…' : 'Crear reserva'}
         </Btn>
       </form>

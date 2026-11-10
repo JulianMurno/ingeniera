@@ -11,6 +11,7 @@ import {
   Input,
   Loading,
   Msg,
+  PageHeader,
   Select,
   Table,
 } from '@/components/ui';
@@ -33,18 +34,29 @@ export default function UsuariosPage() {
 
   return (
     <>
-      <div className="spread">
-        <h1>Usuarios del personal</h1>
-        <Btn variant="primary" onClick={() => { setCreating(true); setEditing(null); }}>
-          + Nuevo usuario
-        </Btn>
-      </div>
+      <PageHeader
+        title="Usuarios del personal"
+        actions={
+          <Btn
+            variant="primary"
+            onClick={() => {
+              setCreating(true);
+              setEditing(null);
+            }}
+          >
+            + Nuevo usuario
+          </Btn>
+        }
+      />
 
       {creating && (
         <UserForm
           title="Nuevo usuario"
           onSubmit={async (body) => api('/api/v1/users', { method: 'POST', body })}
-          onClose={() => { setCreating(false); reload(); }}
+          onClose={() => {
+            setCreating(false);
+            reload();
+          }}
         />
       )}
       {editing && (
@@ -52,7 +64,10 @@ export default function UsuariosPage() {
           title={`Editar usuario ${editing.username}`}
           initial={editing}
           onSubmit={async (body) => api(`/api/v1/users/${editing.id}`, { method: 'PATCH', body })}
-          onClose={() => { setEditing(null); reload(); }}
+          onClose={() => {
+            setEditing(null);
+            reload();
+          }}
         />
       )}
 
@@ -67,14 +82,28 @@ export default function UsuariosPage() {
               <tr key={u.id}>
                 <td>{u.username}</td>
                 <td>{u.rol}</td>
-                <td>{u.activo ? <Badge kind="ok">Activo</Badge> : <Badge kind="down">Desactivado</Badge>}</td>
-                <td className="spread">
-                  <Btn variant="sm" onClick={() => { setEditing(u); setCreating(false); }}>
-                    Editar
-                  </Btn>
-                  <Btn variant="sm" onClick={() => deactivate(u)}>
-                    {u.activo ? 'Desactivar' : 'Reactivar'}
-                  </Btn>
+                <td>
+                  {u.activo ? (
+                    <Badge kind="ok">Activo</Badge>
+                  ) : (
+                    <Badge kind="down">Desactivado</Badge>
+                  )}
+                </td>
+                <td>
+                  <div className="flex flex-wrap gap-2">
+                    <Btn
+                      size="sm"
+                      onClick={() => {
+                        setEditing(u);
+                        setCreating(false);
+                      }}
+                    >
+                      Editar
+                    </Btn>
+                    <Btn size="sm" onClick={() => deactivate(u)}>
+                      {u.activo ? 'Desactivar' : 'Reactivar'}
+                    </Btn>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -119,23 +148,40 @@ function UserForm({ title, initial, onSubmit, onClose }) {
       <ErrorMsg error={err} />
       <Msg>{ok}</Msg>
       <form onSubmit={submit}>
-        <div className="grid grid-2">
+        <div className="grid gap-5 md:grid-cols-2">
           <Field label="Usuario *">
-            <Input value={form.username} onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))} required />
+            <Input
+              value={form.username}
+              onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))}
+              required
+            />
           </Field>
           <Field label="Rol *">
-            <Select value={form.rol} onChange={(e) => setForm((f) => ({ ...f, rol: e.target.value }))}>
+            <Select
+              value={form.rol}
+              onChange={(e) => setForm((f) => ({ ...f, rol: e.target.value }))}
+            >
               <option value="RECEPCIONISTA">Recepcionista</option>
               <option value="ADMINISTRADOR">Administrador</option>
             </Select>
           </Field>
           <Field label={initial ? 'Contraseña (dejar vacío para no cambiarla)' : 'Contraseña *'}>
-            <Input type="password" value={form.password} onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} required={!initial} minLength={6} />
+            <Input
+              type="password"
+              value={form.password}
+              onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+              required={!initial}
+              minLength={6}
+            />
           </Field>
         </div>
-        <div className="row">
-          <Btn type="submit" variant="primary" disabled={busy}>Guardar</Btn>
-          <Btn onClick={onClose}>Cancelar</Btn>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <Btn type="submit" variant="primary" disabled={busy}>
+            Guardar
+          </Btn>
+          <Btn type="button" onClick={onClose}>
+            Cancelar
+          </Btn>
         </div>
       </form>
     </Card>

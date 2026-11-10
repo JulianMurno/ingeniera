@@ -39,7 +39,7 @@ export default function FormCargo({ extras, reservationId, onDone }) {
     <form onSubmit={onSubmit}>
       <ErrorMsg error={error} />
       <Msg>{ok}</Msg>
-      <div className="row">
+      <div className="flex flex-wrap items-end gap-4">
         <Field label="Servicio">
           <Select value={extraId} onChange={(e) => setExtraId(e.target.value)}>
             {extras.map((e) => (
@@ -63,7 +63,7 @@ export default function FormCargo({ extras, reservationId, onDone }) {
           <Input value={nota} onChange={(e) => setNota(e.target.value)} />
         </Field>
         <Field label="Importe estimado">
-          <span className="money">{fmtMoney(importe)}</span>
+          <span className="font-semibold tabular-nums">{fmtMoney(importe)}</span>
         </Field>
         <Btn type="submit" variant="primary" disabled={busy}>
           Registrar cargo

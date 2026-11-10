@@ -10,6 +10,7 @@ import {
   Field,
   Input,
   Loading,
+  PageHeader,
   Pager,
   Select,
   Table,
@@ -78,14 +79,16 @@ export default function LimpiezaPage() {
 
   return (
     <>
-      <div className="spread">
-        <h1>Limpieza</h1>
-        {admin && (
-          <Btn variant="primary" onClick={() => setCreating(true)}>
-            + Programar tarea
-          </Btn>
-        )}
-      </div>
+      <PageHeader
+        title="Limpieza"
+        actions={
+          admin && (
+            <Btn variant="primary" onClick={() => setCreating(true)}>
+              + Programar tarea
+            </Btn>
+          )
+        }
+      />
 
       {creating && (
         <TaskForm
@@ -99,7 +102,7 @@ export default function LimpiezaPage() {
       )}
 
       <Card title="Estado actual por habitación">
-        <div className="grid grid-2">
+        <div className="grid gap-5 md:grid-cols-2">
           <Field label="Habitación">
             <Select value={roomStatusId} onChange={(e) => setRoomStatusId(e.target.value)}>
               <option value="">Elegir habitación…</option>
@@ -112,13 +115,15 @@ export default function LimpiezaPage() {
           </Field>
           <div>
             {!roomStatusId ? (
-              <p className="muted">Seleccioná una habitación para consultar su estado derivado.</p>
+              <p className="text-[13px] text-muted">
+                Seleccioná una habitación para consultar su estado derivado.
+              </p>
             ) : roomStatus.loading ? (
               <Loading />
             ) : roomStatus.error ? (
               <ErrorMsg error={roomStatus.error} />
             ) : (
-              <div className="row">
+              <div className="flex flex-wrap items-center gap-4">
                 <span>
                   Limpieza: <Badge kind={roomStatus.data?.limpieza} />
                 </span>
@@ -136,8 +141,10 @@ export default function LimpiezaPage() {
         ) : resumen.error ? (
           <ErrorMsg error={resumen.error} />
         ) : (
-          <div className="row">
-            {(resumen.data?.porEstado || []).length === 0 && <p className="muted">Sin tareas</p>}
+          <div className="flex flex-wrap items-center gap-3">
+            {(resumen.data?.porEstado || []).length === 0 && (
+              <p className="text-[13px] text-muted">Sin tareas</p>
+            )}
             {(resumen.data?.porEstado || []).map((r) => (
               <span key={r.estado}>
                 <Badge kind={r.estado} /> {r._count}
@@ -148,7 +155,7 @@ export default function LimpiezaPage() {
       </Card>
 
       <Card title="Filtros">
-        <div className="row">
+        <div className="flex flex-wrap items-end gap-4">
           <Field label="Estado">
             <Select value={filtros.estado} onChange={setFiltro('estado')}>
               <option value="">Todos</option>
@@ -207,18 +214,21 @@ export default function LimpiezaPage() {
                 <td>
                   <Badge kind={t.estado} />
                 </td>
-                <td className="row">
-                  {(TRANSICIONES[t.estado] || [])
-                    .filter((s) => s !== 'CANCELADA' || admin)
-                    .map((s) => (
-                      <Btn
-                        key={s}
-                        variant={s === 'CANCELADA' ? 'sm btn-danger' : 'sm'}
-                        onClick={() => cambiarEstado(t, s)}
-                      >
-                        {s}
-                      </Btn>
-                    ))}
+                <td>
+                  <div className="flex flex-wrap gap-2">
+                    {(TRANSICIONES[t.estado] || [])
+                      .filter((s) => s !== 'CANCELADA' || admin)
+                      .map((s) => (
+                        <Btn
+                          key={s}
+                          size="sm"
+                          variant={s === 'CANCELADA' ? 'danger' : 'secondary'}
+                          onClick={() => cambiarEstado(t, s)}
+                        >
+                          {s}
+                        </Btn>
+                      ))}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -266,7 +276,7 @@ function TaskForm({ onClose }) {
     <Card title="Programar tarea">
       <ErrorMsg error={err || rooms.error || users.error} />
       <form onSubmit={submit}>
-        <div className="grid grid-2">
+        <div className="grid gap-5 md:grid-cols-2">
           <Field label="Habitación *">
             <Select value={form.roomId} onChange={set('roomId')} required>
               <option value="">Elegir…</option>
@@ -287,7 +297,12 @@ function TaskForm({ onClose }) {
             </Select>
           </Field>
           <Field label="Fecha programada *">
-            <Input type="date" value={form.fechaProgramada} onChange={set('fechaProgramada')} required />
+            <Input
+              type="date"
+              value={form.fechaProgramada}
+              onChange={set('fechaProgramada')}
+              required
+            />
           </Field>
           <Field label="Responsable">
             <Select value={form.asignadoAId} onChange={set('asignadoAId')}>
@@ -303,7 +318,7 @@ function TaskForm({ onClose }) {
             <Input value={form.observaciones} onChange={set('observaciones')} />
           </Field>
         </div>
-        <div className="row">
+        <div className="mt-2 flex flex-wrap gap-2">
           <Btn type="submit" variant="primary" disabled={busy}>
             Guardar
           </Btn>

@@ -1,7 +1,17 @@
 'use client';
 
 import Link from 'next/link';
-import { Card, ErrorMsg, Loading, Table, Badge, fmtDate, fmtMoney } from '@/components/ui';
+import {
+  Card,
+  ErrorMsg,
+  Loading,
+  PageHeader,
+  Table,
+  Badge,
+  buttonVariants,
+  fmtDate,
+  fmtMoney,
+} from '@/components/ui';
 import { useData } from '@/lib/useData';
 import RequireGuest from '@/components/RequireGuest';
 
@@ -14,12 +24,17 @@ function MisReservasContent() {
 
   return (
     <>
-      <div className="spread">
-        <h1>Mis reservas</h1>
-        <Link href="/portal/reservar" className="btn btn-primary btn-sm">
-          Nueva reserva
-        </Link>
-      </div>
+      <PageHeader
+        title="Mis reservas"
+        actions={
+          <Link
+            href="/portal/reservar"
+            className={buttonVariants({ variant: 'primary', size: 'sm' })}
+          >
+            Nueva reserva
+          </Link>
+        }
+      />
 
       <Card title={`Reservas (${reservations.length})`}>
         <Table
@@ -39,14 +54,14 @@ function MisReservasContent() {
               <td>
                 {reservation.adultos} adulto(s) + {reservation.menores} menor(es)
               </td>
-              <td className="money">{fmtMoney(reservation.total)}</td>
+              <td className="font-semibold tabular-nums">{fmtMoney(reservation.total)}</td>
               <td>
                 <Badge kind={reservation.estado} />
               </td>
               <td>
                 <Link
                   href={`/portal/mis-reservas/${reservation.id}`}
-                  className="btn btn-sm"
+                  className={buttonVariants({ size: 'sm' })}
                 >
                   Ver detalle
                 </Link>

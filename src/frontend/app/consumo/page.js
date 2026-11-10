@@ -10,6 +10,7 @@ import {
   Field,
   Input,
   Loading,
+  PageHeader,
   Table,
   fmtDate,
   fmtMoney,
@@ -37,10 +38,10 @@ export default function ConsumoPage() {
 
   return (
     <>
-      <h1>Consumo de servicios</h1>
+      <PageHeader title="Consumo de servicios" />
 
       <Card title="Período">
-        <form className="row" onSubmit={consultar}>
+        <form className="flex flex-wrap items-end gap-4" onSubmit={consultar}>
           <Field label="Desde">
             <Input type="date" value={desde} onChange={(e) => setDesde(e.target.value)} required />
           </Field>
@@ -51,7 +52,9 @@ export default function ConsumoPage() {
             Consultar
           </Btn>
         </form>
-        <p className="muted">Solo se consideran los cargos vigentes (no anulados) del período.</p>
+        <p className="text-[13px] text-muted">
+          Solo se consideran los cargos vigentes (no anulados) del período.
+        </p>
       </Card>
 
       {!rango ? null : loading ? (
@@ -61,7 +64,9 @@ export default function ConsumoPage() {
       ) : (
         <Card
           title={`Consumo ${fmtDate(raw?.desde)} → ${fmtDate(raw?.hasta)}`}
-          actions={<span className="money">Total: {fmtMoney(raw?.totalPeriodo)}</span>}
+          actions={
+            <span className="font-semibold tabular-nums">Total: {fmtMoney(raw?.totalPeriodo)}</span>
+          }
         >
           <Table
             headers={['Código', 'Servicio', 'Categoría', 'Cantidad', 'Importe']}
@@ -73,7 +78,7 @@ export default function ConsumoPage() {
                 <td>{item.nombre}</td>
                 <td>{CATEGORIA_LABEL[item.categoria] || item.categoria}</td>
                 <td>{item.cantidad}</td>
-                <td className="money">{fmtMoney(item.importe)}</td>
+                <td className="font-semibold tabular-nums">{fmtMoney(item.importe)}</td>
               </tr>
             ))}
           </Table>

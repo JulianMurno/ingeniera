@@ -13,7 +13,9 @@ import {
   Input,
   Loading,
   Msg,
+  PageHeader,
   Table,
+  buttonVariants,
   fmtDate,
   fmtMoney,
 } from '@/components/ui';
@@ -32,7 +34,7 @@ function ReservaDetalleContent() {
 
   if (loading) return <Loading />;
   if (error) return <ErrorMsg error={error} />;
-  if (!reservation) return <p className="muted">Reserva no encontrada</p>;
+  if (!reservation) return <p className="text-[13px] text-muted">Reserva no encontrada</p>;
 
   async function cancelar() {
     setErr(null);
@@ -55,14 +57,19 @@ function ReservaDetalleContent() {
 
   return (
     <>
-      <div className="spread">
-        <h1>
-          Reserva {reservation.codigo || `#${reservation.id}`} <Badge kind={reservation.estado} />
-        </h1>
-        <Link href="/portal/mis-reservas" className="btn btn-sm">
-          ← Volver
-        </Link>
-      </div>
+      <PageHeader
+        title={
+          <span className="flex flex-wrap items-center gap-2">
+            Reserva {reservation.codigo || `#${reservation.id}`}{' '}
+            <Badge kind={reservation.estado} />
+          </span>
+        }
+        actions={
+          <Link href="/portal/mis-reservas" className={buttonVariants({ size: 'sm' })}>
+            ← Volver
+          </Link>
+        }
+      />
 
       <ErrorMsg error={err} />
       <Msg>{msg}</Msg>
@@ -90,7 +97,7 @@ function ReservaDetalleContent() {
           </tr>
           <tr>
             <td>Total</td>
-            <td className="money">{fmtMoney(reservation.total)}</td>
+            <td className="font-semibold tabular-nums">{fmtMoney(reservation.total)}</td>
           </tr>
           {reservation.notas && (
             <tr>
@@ -109,11 +116,11 @@ function ReservaDetalleContent() {
 
       {reservation.estado === 'CONFIRMADA' && (
         <Card title="Cancelar reserva">
-          <div className="row" style={{ alignItems: 'flex-end' }}>
+          <div className="flex flex-wrap items-end gap-4">
             <Field label="Motivo (opcional)">
               <Input value={motivo} onChange={(e) => setMotivo(e.target.value)} />
             </Field>
-            <Btn variant="danger" onClick={cancelar} disabled={busy}>
+            <Btn type="button" variant="danger" onClick={cancelar} disabled={busy}>
               {busy ? 'Cancelando...' : 'Cancelar reserva'}
             </Btn>
           </div>
