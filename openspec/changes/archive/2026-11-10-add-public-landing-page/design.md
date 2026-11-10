@@ -24,7 +24,7 @@ Restricciones relevantes:
 - No se agrega buscador de disponibilidad, tarifas ni reserva directa en el landing.
 - No se modifica el backend, Prisma, endpoints ni reglas de negocio.
 - No se incorpora CMS, internacionalización ni gestión de contenido editable.
-- No se rediseñan las pantallas internas del personal ni el portal de huéspedes; solo se actualiza la marca y el destino del panel.
+- No se modifican la lógica ni los flujos funcionales del panel del personal y del portal de huéspedes; sus pantallas sí comparten la identidad visual del landing.
 - No se agregan fotografías remotas ni fuentes externas; el hero usa arte SVG local.
 
 ## Decisions
@@ -49,9 +49,9 @@ Se extrae la estructura de `app/layout.js` a un componente cliente `components/A
 
 El tema se aplica con `data-landing-theme="light|dark"` en `<html>`. La landing define tokens con prefijo `--ml-*` y usa selectores `:root[data-landing-theme='dark'] .landing` para el modo oscuro. Un script inline mínimo en `app/layout.js` (antes de la hidratación) lee `localStorage['mirador-theme']`; si no existe, usa `window.matchMedia('(prefers-color-scheme: dark)')`, y setea el atributo. `components/landing/ThemeToggle.jsx` alterna el atributo, guarda la elección y muestra el icono sol/luna. El `<html>` lleva `suppressHydrationWarning` para tolerar el atributo agregado antes de React.
 
-**Rationale:** aplicar el tema en el documento antes de pintar elimina el flash del tema contrario y evita un estado de React que pueda diferir del HTML del servidor. Al mantener los tokens bajo `.landing`, el resto del panel conserva su paleta actual.
+**Rationale:** aplicar el tema en el documento antes de pintar elimina el flash del tema contrario y evita un estado de React que pueda diferir del HTML del servidor. Los tokens del landing siguen aislados bajo `.landing`; las rutas de gestión y del portal autenticado consumen una escala equivalente desde `.branded-shell` para mantener la identidad de marca sin afectar las pantallas de acceso.
 
-**Alternativas consideradas:** (a) tema en un contexto React con `useEffect`: produce parpadeo en la primera carga y un render inicial incorrecto; (b) tema global en `:root` para toda la app: cambiaría el panel y el portal sin que este cambio lo requiera; (c) solo `prefers-color-scheme` sin toggle: no cumple el control manual solicitado.
+**Alternativas consideradas:** (a) tema en un contexto React con `useEffect`: produce parpadeo en la primera carga y un render inicial incorrecto; (b) aplicar directamente los tokens del landing al `:root`: acopla los estilos de ambas superficies; (c) solo `prefers-color-scheme` sin toggle: no cumple el control manual solicitado.
 
 ### 4. Identidad visual con tokens verde/crema y tipografía de sistema
 
@@ -87,6 +87,12 @@ Los textos de marca, hero, propuesta de valor, habitaciones destacadas, servicio
 - `app/landing.css`: tokens, layout, tipografía, componentes y reglas `@media (prefers-reduced-motion: reduce)`; clases con prefijo `ml-` para no colisionar con `globals.css`.
 
 **Rationale:** solo el header y el toggle necesitan interacción; el resto queda como server components, lo que reduce JavaScript enviado al cliente. Las clases prefijadas permiten convivir con el CSS global existente sin reescribirlo.
+
+### 8. Identidad visual en las rutas autenticadas
+
+Las rutas de gestión y del portal autenticado se envuelven en `.branded-shell`, que reutiliza los colores verde/crema, tipografía, textura y preferencia clara/oscura de Mirador del Sol mediante tokens compatibles con `globals.css`. Las pantallas de acceso quedan fuera de ese wrapper. La navegación autenticada usa el emblema de hoja del landing y mantiene los destinos y acciones existentes.
+
+**Rationale:** el pedido posterior al diseño inicial requiere coherencia visual entre la presentación pública, la gestión y la experiencia del huésped. Mantener tokens locales al shell evita afectar las pantallas de acceso y no altera los componentes ni los flujos de negocio.
 
 ### 8. Accesibilidad y respuesta a tamaño de pantalla
 
