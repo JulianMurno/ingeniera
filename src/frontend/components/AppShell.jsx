@@ -12,6 +12,10 @@ const PUBLIC_APP_PATHS = ['/login', '/portal/login', '/portal/registro'];
 const CONTAINER_CLASSES =
   'mx-auto w-full max-w-[1280px] px-4 pt-6 pb-12 [&>*+*]:mt-6 max-[540px]:px-3.5';
 
+function isStaffUser(user) {
+  return user?.rol === 'ADMINISTRADOR' || user?.rol === 'RECEPCIONISTA';
+}
+
 function StaffRouteGuard({ children }) {
   const router = useRouter();
   const [authorized, setAuthorized] = useState(false);
@@ -19,7 +23,7 @@ function StaffRouteGuard({ children }) {
 
   useEffect(() => {
     const user = getSessionUser();
-    const isStaff = user?.rol === 'ADMINISTRADOR' || user?.rol === 'RECEPCIONISTA';
+    const isStaff = isStaffUser(user);
     setAuthorized(isStaff);
     setReady(true);
 
@@ -44,14 +48,29 @@ function StaffRouteGuard({ children }) {
 
 export default function AppShell({ children }) {
   const pathname = usePathname();
+  const [user, setUser] = useState(null);
+
+  useEffect(() => {
+    setUser(getSessionUser());
+  }, [pathname]);
 
   if (pathname === '/') {
     return children;
   }
 
-  const shell = (
-    <div className={PUBLIC_APP_PATHS.includes(pathname) ? undefined : 'branded-shell'}>
-      <Nav />
+  const publicApp = PUBLIC_APP_PATHS.includes(pathname);
+  const staffShell = isStaffUser(user) && !publicApp;
+
+  const shell = staffShell ? (
+    <div className="branded-shell min-h-screen lg:flex">
+      <Nav user={user} onLogout={() => setUser(null)} />
+      <div className="min-w-0 flex-1">
+        <main className={CONTAINER_CLASSES}>{children}</main>
+      </div>
+    </div>
+  ) : (
+    <div className={publicApp ? undefined : 'branded-shell'}>
+      <Nav user={user} onLogout={() => setUser(null)} />
       <main className={CONTAINER_CLASSES}>{children}</main>
     </div>
   );
