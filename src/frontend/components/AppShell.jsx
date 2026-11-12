@@ -10,7 +10,7 @@ const STAFF_PATHS = ['/limpieza', '/mantenimiento'];
 const PUBLIC_APP_PATHS = ['/login', '/portal/login', '/portal/registro'];
 
 const CONTAINER_CLASSES =
-  'mx-auto w-full max-w-[1280px] px-4 pt-6 pb-12 [&>*+*]:mt-6 max-[540px]:px-3.5';
+  'mx-auto w-full max-w-[1280px] px-3.5 pt-6 pb-12 [&>*+*]:mt-6 sm:px-4 lg:px-8';
 
 function isStaffUser(user) {
   return user?.rol === 'ADMINISTRADOR' || user?.rol === 'RECEPCIONISTA';

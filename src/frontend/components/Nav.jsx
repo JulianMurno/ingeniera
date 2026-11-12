@@ -31,22 +31,23 @@ const GUEST_LINKS = [
 
 const TOPBAR_CLASSES =
   'sticky top-0 z-50 border-b border-border bg-topbar shadow-card backdrop-blur-md';
+// Mobile-first: base = phone, `min-[900px]:` = single-row desktop topbar.
 const TOPBAR_INNER_CLASSES =
-  'mx-auto flex min-h-16 w-full max-w-[1280px] items-center gap-8 px-4 pt-6 pb-12 max-[900px]:flex-wrap max-[900px]:gap-x-5 max-[900px]:gap-y-3 max-[900px]:pt-3 max-[900px]:pb-3';
+  'mx-auto flex min-h-16 w-full max-w-[1280px] flex-wrap items-center gap-x-5 gap-y-3 px-3.5 py-3 sm:px-4 lg:px-8 min-[900px]:flex-nowrap min-[900px]:gap-8';
 const BRAND_CLASSES = 'flex items-center gap-[11px] whitespace-nowrap text-primary no-underline';
 const BRAND_MARK_CLASSES =
   'grid h-[38px] w-[38px] place-items-center rounded-full border border-border-strong bg-surface text-primary [&_svg]:h-5 [&_svg]:w-5';
 const NAV_CLASSES =
-  'flex flex-1 flex-wrap gap-1 max-[900px]:order-3 max-[900px]:basis-full max-[900px]:flex-nowrap max-[900px]:overflow-x-auto max-[900px]:pb-0.5';
+  'order-3 flex basis-full flex-nowrap gap-1 overflow-x-auto pb-0.5 min-[900px]:order-none min-[900px]:flex-1 min-[900px]:basis-auto min-[900px]:flex-wrap min-[900px]:overflow-visible min-[900px]:pb-0';
 const NAV_USER_CLASSES =
-  'ml-auto flex items-center gap-3 rounded-pill border border-border bg-surface py-1.5 pr-2 pl-3.5 max-[540px]:border-0 max-[540px]:bg-transparent max-[540px]:p-0';
-const USER_INFO_CLASSES = 'flex flex-col items-end gap-0.5 max-[540px]:hidden';
+  'ml-auto flex items-center gap-3 sm:rounded-pill sm:border sm:border-border sm:bg-surface sm:py-1.5 sm:pr-2 sm:pl-3.5';
+const USER_INFO_CLASSES = 'hidden flex-col items-end gap-0.5 sm:flex';
 
 const SIDEBAR_CLASSES =
   'sticky top-0 z-40 hidden h-screen w-[260px] shrink-0 flex-col border-r border-border bg-surface px-3 py-5 lg:flex';
 const SIDEBAR_NAV_CLASSES = 'mt-4 flex flex-1 flex-col gap-0.5 overflow-y-auto pb-2';
 const SIDEBAR_LABEL_CLASSES =
-  'mt-5 px-3 text-[10px] font-semibold tracking-[0.12em] text-muted uppercase';
+  'mt-5 mb-0 px-3 text-[10px] font-semibold tracking-[0.12em] text-muted uppercase';
 const SIDEBAR_FOOTER_CLASSES = 'mt-2 border-t border-border pt-4';
 const MOBILE_STAFF_HEADER_CLASSES =
   'sticky top-0 z-50 border-b border-border bg-topbar shadow-card backdrop-blur-md lg:hidden';
@@ -184,8 +185,8 @@ export default function Nav({ user = null, onLogout }) {
               {initial}
             </span>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[13px] font-semibold">{user.username}</p>
-              <p className="text-[11px] text-muted">
+              <p className="m-0 truncate text-[13px] font-semibold">{user.username}</p>
+              <p className="m-0 text-[11px] text-muted">
                 <RoleLabel role={user.rol} />
               </p>
             </div>

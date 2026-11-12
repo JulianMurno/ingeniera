@@ -1,7 +1,7 @@
 import { cn } from '@/lib/cn';
 
 const BASE =
-  'inline-flex items-center justify-center gap-1.5 rounded-control border font-medium leading-tight transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50';
+  'inline-flex items-center justify-center gap-1.5 rounded-control border font-sans font-medium leading-tight no-underline transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50';
 
 const VARIANT_CLASSES = {
   primary:

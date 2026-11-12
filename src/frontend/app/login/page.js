@@ -32,7 +32,7 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="mx-auto mt-12 w-full max-w-[440px] max-[720px]:mt-4">
+    <div className="mx-auto mt-4 w-full max-w-[440px] md:mt-12">
       <h1 className="mb-6 text-center font-display text-[32px] font-bold tracking-[-0.01em]">
         Mirador del Sol
       </h1>
