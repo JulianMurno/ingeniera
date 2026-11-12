@@ -991,6 +991,47 @@ const spec = {
         responses: { 200: { description: 'Reservas paginadas' } },
       },
     },
+    '/reservations/calendar': {
+      get: {
+        tags: ['Reservas'],
+        summary: 'Devuelve habitaciones y reservas vigentes de un rango de fechas',
+        description:
+          'Consulta de lectura para la vista calendario del panel. Recibe `desde` y `hasta` en ' +
+          'formato `YYYY-MM-DD` y devuelve todas las habitaciones ordenadas por número junto con ' +
+          'las reservas que ocupan noches dentro de `[desde, hasta)`: se incluyen solo las que ' +
+          'cumplen `checkIn < hasta` y `checkOut > desde` en estado `CONFIRMADA`, `EN_CURSO` o ' +
+          '`FINALIZADA`. Las reservas `CANCELADA` y `NO_SHOW` no ocupan noches y no se incluyen. ' +
+          'Un rango ausente, con formato inválido o con `desde` mayor o igual a `hasta` responde ' +
+          '`422`.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: 'desde',
+            in: 'query',
+            required: true,
+            schema: { type: 'string', format: 'date' },
+            description: 'Primera fecha del rango, incluida',
+          },
+          {
+            name: 'hasta',
+            in: 'query',
+            required: true,
+            schema: { type: 'string', format: 'date' },
+            description: 'Límite superior del rango, excluido',
+          },
+        ],
+        responses: {
+          200: {
+            description: 'Habitaciones y reservas vigentes del rango',
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/ReservationCalendar' } },
+            },
+          },
+          401: { $ref: '#/components/responses/Error401' },
+          422: { $ref: '#/components/responses/Error422' },
+        },
+      },
+    },
     '/reservations/{id}': {
       get: {
         tags: ['Reservas'],
@@ -1155,7 +1196,9 @@ const spec = {
         responses: {
           200: {
             description: 'Cargos y resumen de la reserva',
-            content: { 'application/json': { schema: { $ref: '#/components/schemas/ChargeList' } } },
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/ChargeList' } },
+            },
           },
           401: { $ref: '#/components/responses/Error401' },
           404: { $ref: '#/components/responses/Error404' },
@@ -1201,7 +1244,9 @@ const spec = {
         responses: {
           201: {
             description: 'Servicio creado',
-            content: { 'application/json': { schema: { $ref: '#/components/schemas/HotelExtra' } } },
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/HotelExtra' } },
+            },
           },
           401: { $ref: '#/components/responses/Error401' },
           403: { $ref: '#/components/responses/Error403' },
@@ -1217,7 +1262,11 @@ const spec = {
           've los servicios activos, sin importar el filtro enviado.',
         security: [{ bearerAuth: [] }],
         parameters: [
-          { name: 'categoria', in: 'query', schema: { $ref: '#/components/schemas/CategoriaExtra' } },
+          {
+            name: 'categoria',
+            in: 'query',
+            schema: { $ref: '#/components/schemas/CategoriaExtra' },
+          },
           { name: 'activo', in: 'query', schema: { type: 'boolean' } },
           { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
           { name: 'pageSize', in: 'query', schema: { type: 'integer', default: 10, maximum: 100 } },
@@ -1241,8 +1290,18 @@ const spec = {
           'período, excluyendo los cargos anulados. Rango inválido (desde >= hasta) responde `422`.',
         security: [{ bearerAuth: [] }],
         parameters: [
-          { name: 'desde', in: 'query', required: true, schema: { type: 'string', format: 'date' } },
-          { name: 'hasta', in: 'query', required: true, schema: { type: 'string', format: 'date' } },
+          {
+            name: 'desde',
+            in: 'query',
+            required: true,
+            schema: { type: 'string', format: 'date' },
+          },
+          {
+            name: 'hasta',
+            in: 'query',
+            required: true,
+            schema: { type: 'string', format: 'date' },
+          },
         ],
         responses: {
           200: {
@@ -1274,7 +1333,9 @@ const spec = {
         responses: {
           200: {
             description: 'Servicio actualizado',
-            content: { 'application/json': { schema: { $ref: '#/components/schemas/HotelExtra' } } },
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/HotelExtra' } },
+            },
           },
           401: { $ref: '#/components/responses/Error401' },
           403: { $ref: '#/components/responses/Error403' },
@@ -1294,7 +1355,9 @@ const spec = {
         responses: {
           200: {
             description: 'Servicio dado de baja',
-            content: { 'application/json': { schema: { $ref: '#/components/schemas/HotelExtra' } } },
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/HotelExtra' } },
+            },
           },
           401: { $ref: '#/components/responses/Error401' },
           403: { $ref: '#/components/responses/Error403' },
@@ -1403,7 +1466,9 @@ const spec = {
         requestBody: {
           required: true,
           content: {
-            'application/json': { schema: { $ref: '#/components/schemas/MaintenanceTicketCreate' } },
+            'application/json': {
+              schema: { $ref: '#/components/schemas/MaintenanceTicketCreate' },
+            },
           },
         },
         responses: {
@@ -1464,7 +1529,9 @@ const spec = {
         requestBody: {
           required: true,
           content: {
-            'application/json': { schema: { $ref: '#/components/schemas/MaintenanceTicketUpdate' } },
+            'application/json': {
+              schema: { $ref: '#/components/schemas/MaintenanceTicketUpdate' },
+            },
           },
         },
         responses: {
@@ -1769,7 +1836,8 @@ const spec = {
               guestId: {
                 type: 'integer',
                 nullable: true,
-                description: 'Ficha asociada cuando el usuario es un huésped; `null` para el personal',
+                description:
+                  'Ficha asociada cuando el usuario es un huésped; `null` para el personal',
               },
               nombre: {
                 type: 'string',
@@ -2169,6 +2237,41 @@ const spec = {
           },
         },
       },
+      ReservationCalendar: {
+        type: 'object',
+        properties: {
+          rooms: {
+            type: 'array',
+            description: 'Todas las habitaciones, ordenadas por número',
+            items: { $ref: '#/components/schemas/Room' },
+          },
+          reservations: {
+            type: 'array',
+            description: 'Reservas que ocupan al menos una noche del rango',
+            items: { $ref: '#/components/schemas/CalendarReservation' },
+          },
+        },
+      },
+      CalendarReservation: {
+        type: 'object',
+        properties: {
+          id: { type: 'integer' },
+          roomId: { type: 'integer' },
+          codigo: {
+            type: 'string',
+            nullable: true,
+            pattern: '^HR-[A-Z0-9]{6}$',
+            description: 'Código de confirmación que muestra la celda reservada',
+          },
+          checkIn: { type: 'string', format: 'date' },
+          checkOut: { type: 'string', format: 'date' },
+          estado: { $ref: '#/components/schemas/EstadoReserva' },
+          guest: {
+            type: 'object',
+            properties: { nombre: { type: 'string' } },
+          },
+        },
+      },
       EarlyCheckIn: {
         type: 'boolean',
         description:
@@ -2283,7 +2386,11 @@ const spec = {
           },
           nombre: { type: 'string' },
           categoria: { $ref: '#/components/schemas/CategoriaExtra' },
-          precio: { type: 'integer', minimum: 1, description: 'Precio en la unidad base de la moneda' },
+          precio: {
+            type: 'integer',
+            minimum: 1,
+            description: 'Precio en la unidad base de la moneda',
+          },
           unidad: { $ref: '#/components/schemas/UnidadExtra' },
           activo: {
             type: 'boolean',
@@ -2365,7 +2472,10 @@ const spec = {
       ChargeResumen: {
         type: 'object',
         properties: {
-          totalEstadia: { type: 'integer', description: 'Costo de la estadía (`Reservation.total`)' },
+          totalEstadia: {
+            type: 'integer',
+            description: 'Costo de la estadía (`Reservation.total`)',
+          },
           totalServicios: { type: 'integer', description: 'Suma de cargos no anulados' },
           totalGeneral: { type: 'integer', description: '`totalEstadia + totalServicios`' },
           cantidadCargos: { type: 'integer' },
@@ -2402,7 +2512,15 @@ const spec = {
       },
       EstadoHousekeeping: {
         type: 'string',
-        enum: ['PENDIENTE', 'EN_PROCESO', 'LIMPIA', 'EN_INSPECCION', 'INSPECCION_OK', 'INSPECCION_FALLA', 'CANCELADA'],
+        enum: [
+          'PENDIENTE',
+          'EN_PROCESO',
+          'LIMPIA',
+          'EN_INSPECCION',
+          'INSPECCION_OK',
+          'INSPECCION_FALLA',
+          'CANCELADA',
+        ],
       },
       TipoHousekeeping: {
         type: 'string',
@@ -2565,7 +2683,10 @@ const spec = {
           },
           tarifaPromedioPorNoche: { type: 'integer' },
           total: { type: 'integer', description: 'Costo de la estadía (`Reservation.total`)' },
-          totalEstadia: { type: 'integer', description: 'Costo de la estadía (`Reservation.total`)' },
+          totalEstadia: {
+            type: 'integer',
+            description: 'Costo de la estadía (`Reservation.total`)',
+          },
           totalServicios: {
             type: 'integer',
             description: 'Suma de los cargos de servicios no anulados',

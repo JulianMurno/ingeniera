@@ -176,6 +176,30 @@ describe('Documentación OpenAPI', () => {
     ).toEqual({ schema: { $ref: '#/components/schemas/ReservationCancel' } });
   });
 
+  test('GET /reservations/calendar documenta el rango y su respuesta', () => {
+    const { get } = spec.paths['/reservations/calendar'];
+
+    expect(get).toBeDefined();
+    expect(get.tags).toEqual(['Reservas']);
+    expect(queryParamNames(get)).toEqual(['desde', 'hasta']);
+    expect(get.parameters.every((p) => p.required)).toBe(true);
+    expect(get.responses[200].content['application/json'].schema).toEqual({
+      $ref: '#/components/schemas/ReservationCalendar',
+    });
+    expect(get.responses[401]).toBeDefined();
+    expect(get.responses[422]).toBeDefined();
+
+    const { ReservationCalendar, CalendarReservation } = spec.components.schemas;
+    expect(ReservationCalendar.properties.rooms.items).toEqual({
+      $ref: '#/components/schemas/Room',
+    });
+    expect(ReservationCalendar.properties.reservations.items).toEqual({
+      $ref: '#/components/schemas/CalendarReservation',
+    });
+    expect(CalendarReservation.properties.guest).toBeDefined();
+    expect(CalendarReservation.properties.codigo.pattern).toBe('^HR-[A-Z0-9]{6}$');
+  });
+
   test('las notificaciones por email están documentadas', () => {
     const tag = spec.tags.find((t) => t.name === 'Notificaciones');
 

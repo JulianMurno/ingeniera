@@ -61,9 +61,20 @@ const reservationQuerySchema = z.object({
   pageSize: z.coerce.number().int().positive('pageSize inválido').max(100).default(10),
 });
 
+const calendarQuerySchema = z
+  .object({
+    desde: isoDate,
+    hasta: isoDate,
+  })
+  .refine((d) => d.desde < d.hasta, {
+    message: 'desde debe ser anterior a hasta',
+    path: ['hasta'],
+  });
+
 module.exports = {
   reservationCreateSchema,
   reservationUpdateSchema,
   reservationCancelSchema,
   reservationQuerySchema,
+  calendarQuerySchema,
 };

@@ -20,6 +20,15 @@ async function listReservations(req, res, next) {
   }
 }
 
+async function getCalendar(req, res, next) {
+  try {
+    const calendar = await reservationService.getCalendar(req.query);
+    return res.json(calendar);
+  } catch (err) {
+    return next(err);
+  }
+}
+
 async function getReservation(req, res, next) {
   try {
     const incluirCargos = req.query.incluirCargos === 'true';
@@ -32,7 +41,11 @@ async function getReservation(req, res, next) {
 
 async function updateReservation(req, res, next) {
   try {
-    const reservation = await reservationService.updateReservation(req.params.id, req.body, req.user);
+    const reservation = await reservationService.updateReservation(
+      req.params.id,
+      req.body,
+      req.user,
+    );
     return res.json(reservation);
   } catch (err) {
     return next(err);
@@ -41,7 +54,11 @@ async function updateReservation(req, res, next) {
 
 async function cancelReservation(req, res, next) {
   try {
-    const reservation = await reservationService.cancelReservation(req.params.id, req.body, req.user);
+    const reservation = await reservationService.cancelReservation(
+      req.params.id,
+      req.body,
+      req.user,
+    );
     return res.json(reservation);
   } catch (err) {
     return next(err);
@@ -78,6 +95,7 @@ async function markNoShow(req, res, next) {
 module.exports = {
   createReservation,
   listReservations,
+  getCalendar,
   getReservation,
   updateReservation,
   cancelReservation,

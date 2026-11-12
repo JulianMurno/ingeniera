@@ -1,6 +1,10 @@
 const prisma = require('../lib/prisma');
 const { fromPersistence } = require('../lib/roomMapper');
 const { searchWindow, toDate } = require('../services/business.service');
+const { CONFIRMADA, EN_CURSO, FINALIZADA } = require('../lib/reservationState');
+
+// Estados que ocupan noches en el calendario: CANCELADA y NO_SHOW liberan el rango.
+const ESTADOS_CALENDARIO = [CONFIRMADA, EN_CURSO, FINALIZADA];
 
 function client(tx) {
   return tx || prisma;
@@ -57,6 +61,26 @@ function findBookedRoomIds({ checkIn, checkOut }) {
     .then((rows) => rows.map((row) => row.roomId));
 }
 
+function findCalendarRange({ desde, hasta }) {
+  return prisma.reservation.findMany({
+    where: {
+      estado: { in: ESTADOS_CALENDARIO },
+      checkIn: { lt: toDate(hasta) },
+      checkOut: { gt: toDate(desde) },
+    },
+    select: {
+      id: true,
+      roomId: true,
+      codigo: true,
+      checkIn: true,
+      checkOut: true,
+      estado: true,
+      guest: { select: { nombre: true } },
+    },
+    orderBy: [{ roomId: 'asc' }, { checkIn: 'asc' }],
+  });
+}
+
 function findMany({ dni, roomId, fecha, estado, guestId, page, pageSize }) {
   const where = {
     roomId,
@@ -106,6 +130,7 @@ module.exports = {
   findById,
   findCandidatesInWindow,
   findBookedRoomIds,
+  findCalendarRange,
   findMany,
   update,
   setEstado,
