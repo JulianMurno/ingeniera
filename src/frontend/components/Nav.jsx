@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { api, clearSession } from '@/lib/api';
 import { Leaf } from '@/components/landing/icons';
+import ThemeToggle from '@/components/landing/ThemeToggle';
 import { Btn } from '@/components/ui';
 
 const STAFF_LINKS = [
@@ -190,6 +191,7 @@ export default function Nav({ user = null, onLogout }) {
                 <RoleLabel role={user.rol} />
               </p>
             </div>
+            <ThemeToggle variant="app" />
           </div>
           <Btn
             type="button"
@@ -206,7 +208,10 @@ export default function Nav({ user = null, onLogout }) {
       <header className={MOBILE_STAFF_HEADER_CLASSES}>
         <div className="flex items-center gap-3 px-4 py-3">
           <Brand href="/panel" compact />
-          <Btn type="button" variant="ghost" size="sm" onClick={logout} className="ml-auto">
+          <div className="ml-auto">
+            <ThemeToggle variant="app" />
+          </div>
+          <Btn type="button" variant="ghost" size="sm" onClick={logout}>
             Salir
           </Btn>
         </div>
