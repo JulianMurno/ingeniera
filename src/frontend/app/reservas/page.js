@@ -21,11 +21,13 @@ import {
   fmtMoney,
 } from '@/components/ui';
 import { useData } from '@/lib/useData';
+import ReservationCalendar from '@/components/ReservationCalendar';
 
 export default function ReservasPage() {
   const [filtros, setFiltros] = useState({ fecha: '', estado: '', dni: '' });
   const [page, setPage] = useState(1);
   const [showForm, setShowForm] = useState(false);
+  const [vista, setVista] = useState('listado');
 
   const params = new URLSearchParams({ page, pageSize: 10 });
   if (filtros.estado) params.set('estado', filtros.estado);
@@ -47,6 +49,25 @@ export default function ReservasPage() {
         }
       />
 
+      <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Vista de reservas">
+        <Btn
+          type="button"
+          variant={vista === 'listado' ? 'primary' : 'secondary'}
+          aria-pressed={vista === 'listado'}
+          onClick={() => setVista('listado')}
+        >
+          Listado
+        </Btn>
+        <Btn
+          type="button"
+          variant={vista === 'calendario' ? 'primary' : 'secondary'}
+          aria-pressed={vista === 'calendario'}
+          onClick={() => setVista('calendario')}
+        >
+          Calendario
+        </Btn>
+      </div>
+
       {showForm && (
         <NuevaReserva
           onDone={() => {
@@ -56,7 +77,11 @@ export default function ReservasPage() {
         />
       )}
 
-      <Card title="Filtros">
+      {vista === 'calendario' ? (
+        <ReservationCalendar />
+      ) : (
+        <>
+          <Card title="Filtros">
         <div className="flex flex-wrap items-end gap-4">
           <Field label="Fecha (estancia)">
             <Input
@@ -142,6 +167,8 @@ export default function ReservasPage() {
           </Table>
           <Pager pagination={pagination} onPage={setPage} />
         </Card>
+        )}
+        </>
       )}
     </>
   );
