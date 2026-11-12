@@ -232,6 +232,14 @@ async function listReservations(params) {
   return resRepo.findMany(params);
 }
 
+async function getCalendar({ desde, hasta }) {
+  const [rooms, reservations] = await Promise.all([
+    roomRepo.findAll(),
+    resRepo.findCalendarRange({ desde, hasta }),
+  ]);
+  return { rooms, reservations };
+}
+
 async function getReservation(id, { incluirCargos = false } = {}) {
   const reservation = await resRepo.findById(id);
   if (!reservation) {
@@ -404,6 +412,7 @@ module.exports = {
   cancelReservation,
   createReservation,
   createGuestReservation,
+  getCalendar,
   getReservation,
   getGuestReservation,
   listReservations,

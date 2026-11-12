@@ -47,6 +47,12 @@ function buildWhere({ tipo, estado, tarifaMin, tarifaMax, notMantenimiento, excl
   return where;
 }
 
+function findAll() {
+  return prisma.room
+    .findMany({ orderBy: { numero: 'asc' } })
+    .then((rooms) => rooms.map(fromPersistence));
+}
+
 function findMany(params = {}) {
   const { page = 1, pageSize = 10 } = params;
   const where = buildWhere(params);
@@ -85,6 +91,7 @@ module.exports = {
   findById,
   findByNumero,
   findOperative,
+  findAll,
   findMany,
   findAvailableByRange,
   update,

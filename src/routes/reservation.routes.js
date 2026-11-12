@@ -6,6 +6,7 @@ const {
   reservationUpdateSchema,
   reservationCancelSchema,
   reservationQuerySchema,
+  calendarQuerySchema,
 } = require('../schemas/reservation.schema');
 const { chargeCreateSchema, chargeParamsSchema } = require('../schemas/extras.schema');
 const { idParamSchema } = require('../schemas/room.schema');
@@ -14,6 +15,7 @@ const { getInvoice, registerPayment } = require('../controllers/payment.controll
 const {
   createReservation,
   listReservations,
+  getCalendar,
   getReservation,
   updateReservation,
   cancelReservation,
@@ -21,11 +23,7 @@ const {
   checkOutReservation,
   markNoShow,
 } = require('../controllers/reservation.controller');
-const {
-  createCharge,
-  listCharges,
-  cancelCharge,
-} = require('../controllers/extras.controller');
+const { createCharge, listCharges, cancelCharge } = require('../controllers/extras.controller');
 
 const router = Router();
 
@@ -33,6 +31,8 @@ router.use(requireAuth);
 
 router.post('/', validate(reservationCreateSchema), createReservation);
 router.get('/', validate(reservationQuerySchema, 'query'), listReservations);
+// Debe declararse antes de GET /:id para no caer en la validación del id.
+router.get('/calendar', validate(calendarQuerySchema, 'query'), getCalendar);
 router.get('/:id', validate(idParamSchema, 'params'), getReservation);
 router.patch(
   '/:id',

@@ -4,7 +4,7 @@ export function Card({ title, actions, className, children }) {
   return (
     <section
       className={cn(
-        'rounded-card border border-border bg-surface p-6 shadow-card transition-shadow hover:shadow-card-hover',
+        'rounded-card border border-border bg-surface p-4 shadow-card sm:p-6 transition-shadow hover:shadow-card-hover',
         className,
       )}
     >
